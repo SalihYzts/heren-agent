@@ -7,21 +7,24 @@ const api = vi.hoisted(() => ({
   approve: vi.fn().mockResolvedValue({ status: 'completed' }), deny: vi.fn().mockResolvedValue({}),
   audit: vi.fn().mockResolvedValue([]), ask: vi.fn().mockResolvedValue({}), touch: vi.fn().mockResolvedValue({}),
   submit: vi.fn().mockResolvedValue({ status: 'completed', output: {} }),
+  qr: vi.fn().mockResolvedValue(new Blob(['<svg/>'], { type: 'image/svg+xml' })),
   listener: null as null | ((e: Event) => void),
 }))
 const recorder = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn(), active: false }))
+const speechLevels = vi.hoisted(() => ({ value: [] as number[] }))
+const speaking = vi.hoisted(() => ({ value: false }))
 vi.mock('./lib/api', () => ({
-  Api: class { approve = api.approve; deny = api.deny; audit = api.audit; ask = api.ask; touch = api.touch; submit = api.submit },
+  Api: class { approve = api.approve; deny = api.deny; audit = api.audit; ask = api.ask; touch = api.touch; submit = api.submit; qr = api.qr },
   ApiError: class extends Error {},
   connectEvents: (_key: string, listener: (e: Event) => void) => { api.listener = listener; return () => {} },
 }))
-vi.mock('./voice/useVoice', () => ({ useVoice: () => ({ speech: { speaking: false, queued: 0 }, recorder, stopSpeaking: vi.fn(), handleEvent: vi.fn() }) }))
+vi.mock('./voice/useVoice', () => ({ useVoice: () => ({ speech: { speaking: speaking.value, queued: 0 }, recorder, stopSpeaking: vi.fn(), handleEvent: vi.fn(), speechWave: speechLevels.value }) }))
 vi.mock('./character/loadPack', async importOriginal => {
   const original = await importOriginal<typeof import('./character/loadPack')>()
   return { ...original, loadPack: vi.fn().mockImplementation(async () => ({ pack: (await import('./character/defaultPack')).defaultPack, source: 'builtin' })) }
 })
 
-beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); localStorage.clear(); sessionStorage.setItem('heren.api_key', 'test-key'); vi.clearAllMocks(); recorder.active = false })
+beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); URL.createObjectURL = vi.fn(() => 'blob:qr'); URL.revokeObjectURL = vi.fn(); localStorage.clear(); sessionStorage.setItem('heren.api_key', 'test-key'); vi.clearAllMocks(); recorder.active = false; speaking.value = false; speechLevels.value = [] })
 const snapshot = (devices = 1) => act(() => api.listener?.({ type: 'ui.snapshot', ts: 1, payload: {
   devices: Array.from({ length: devices }, (_, i) => ({ device_id: `pc${i}`, name: i === 0 ? 'Sunucu' : `PC ${i}`, status: 'online', platform: 'linux',
     capabilities: ['get_status', 'get_metrics', 'lock', 'restart_service', 'shutdown', 'restart'], public_key: '', last_seen: null })),
@@ -90,10 +93,59 @@ describe('two-half home screen', () => {
     const input = screen.getByRole('textbox', { name: "Heren'e mesaj" })
     fireEvent.change(input, { target: { value: '  şu tuş çalışmıyor niye  ' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Gönder' })) })
-    expect(api.ask).toHaveBeenCalledWith('şu tuş çalışmıyor niye')
+    expect(api.ask).toHaveBeenCalledWith('şu tuş çalışmıyor niye', { model: '', provider: '' })
     act(() => api.listener?.({ type: 'hermes.thinking', payload: { input: 'Soru' }, ts: 2 }))
     act(() => api.listener?.({ type: 'hermes.tool.started', payload: { tool: 'internal_tool_identifier' }, ts: 3 }))
     expect(screen.getByTestId('hermes-status')).toHaveTextContent('İşlem yapıyor…')
     expect(screen.queryByText(/internal_tool_identifier/)).not.toBeInTheDocument()
+  })
+})
+
+describe('settings: model, phone access, feature guide', () => {
+  it('lets the user pick a Hermes model and sends it with every question', async () => {
+    await openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarlar' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Model' }), { target: { value: ' gpt-4.1 ' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Sağlayıcı' }), { target: { value: 'copilot' } })
+    expect(JSON.parse(localStorage.getItem('heren.settings.v1')!)).toMatchObject({ model: 'gpt-4.1', provider: 'copilot' })
+    fireEvent.click(screen.getByRole('button', { name: 'Ana ekran' }))
+    fireEvent.change(screen.getByRole('textbox', { name: "Heren'e mesaj" }), { target: { value: 'selam' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Gönder' })) })
+    expect(api.ask).toHaveBeenCalledWith('selam', { model: 'gpt-4.1', provider: 'copilot' })
+  })
+
+  it('shows the phone/tablet urls the core reports, or how to enable them', async () => {
+    await openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarlar' }))
+    expect(screen.getByText(/HEREN_HOST=0\.0\.0\.0/)).toBeVisible()          // not enabled → tell how
+    act(() => api.listener?.({ type: 'ui.snapshot', ts: 3, payload: { devices: [], approvals: [], access: { urls: ['https://192.168.1.5:8700', 'https://box.local:8700'], tls: true } } }))
+    expect(screen.getByRole('link', { name: 'https://192.168.1.5:8700' })).toBeVisible()
+    expect(screen.getByText(/sertifikayı bir kez kabul/)).toBeVisible()
+    expect(await screen.findByRole('img', { name: /QR/ })).toBeInTheDocument()
+    expect(api.qr).toHaveBeenCalledWith('https://192.168.1.5:8700')
+  })
+
+  it('has a feature guide that explains what Heren can do', async () => {
+    await openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarlar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Neler yapabilir?' }))
+    expect(screen.getByRole('heading', { name: 'Heren neler yapabilir?' })).toBeVisible()
+    for (const t of ['Konuş', 'Sunucu düğmeleri', 'Onay', 'Telefondan', 'Model']) expect(screen.getAllByText(new RegExp(t)).length).toBeGreaterThan(0)
+  })
+})
+
+describe('waves on the character', () => {
+  it('user wave in front while listening, Heren wave behind while speaking', async () => {
+    await openApp()
+    const stage = screen.getByTestId('character-stage')
+    const waves = () => [...stage.querySelectorAll('svg.wave')].map(s => `${s.getAttribute('data-tone')}:${s.getAttribute('data-active')}`)
+    expect(waves()).toEqual(['heren:false', 'user:false'])     // DOM order = paint order: heren behind, user in front
+    recorder.active = true; (recorder as { wave?: number[] }).wave = [0.1, 0.7]
+    await act(async () => { snapshot() })
+    expect(waves()).toEqual(['heren:false', 'user:true'])
+    recorder.active = false
+    speechLevels.value = [0.3, 0.5]; speaking.value = true
+    await act(async () => { snapshot() })
+    expect(waves()).toEqual(['heren:true', 'user:false'])
   })
 })

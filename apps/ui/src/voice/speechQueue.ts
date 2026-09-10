@@ -81,15 +81,42 @@ export class SpeechQueue {
 }
 
 /** Browser Player on top of HTMLAudioElement. Auth header can't be set on <audio>,
- * so clips are fetched with the bearer and played from a blob URL. */
-export function audioPlayer(fetchClip: (url: string) => Promise<Blob>): Player {
+ * so clips are fetched with the bearer and played from a blob URL.
+ * `onLevel` (optional) gets a 0..1 amplitude ~60×/s while a clip plays, 0 when it stops —
+ * feeds Heren's waveform behind the character. */
+export function audioPlayer(fetchClip: (url: string) => Promise<Blob>, onLevel?: (level: number) => void): Player {
   let current: HTMLAudioElement | null = null
+  let ctx: AudioContext | null = null
+  let analyser: AnalyserNode | null = null
+  const tap = (el: HTMLAudioElement) => {
+    if (!onLevel || typeof AudioContext === 'undefined') return () => {}
+    try {
+      ctx ??= new AudioContext()
+      analyser ??= ctx.createAnalyser()
+      analyser.fftSize = 256
+      const src = ctx.createMediaElementSource(el)
+      src.connect(analyser); analyser.connect(ctx.destination)
+      if (ctx.state === 'suspended') void ctx.resume()
+    } catch { return () => {} }   // element already tapped / unsupported → no meter, audio still plays
+    const buf = new Uint8Array(analyser.fftSize)
+    let raf = 0
+    const tick = () => {
+      analyser!.getByteTimeDomainData(buf)
+      let peak = 0
+      for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i] - 128) / 128; if (v > peak) peak = v }
+      onLevel(peak)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => { cancelAnimationFrame(raf); onLevel(0) }
+  }
   return {
     async play(url) {
       const blob = await fetchClip(url)
       const src = URL.createObjectURL(blob)
       const el = new Audio(src)
       current = el
+      const untap = tap(el)
       try {
         await new Promise<void>((res, rej) => {
           el.onended = () => res()
@@ -98,6 +125,7 @@ export function audioPlayer(fetchClip: (url: string) => Promise<Blob>): Player {
           el.play().catch(rej)
         })
       } finally {
+        untap()
         URL.revokeObjectURL(src)
         if (current === el) current = null
       }

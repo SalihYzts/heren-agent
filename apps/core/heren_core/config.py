@@ -21,6 +21,11 @@ class Settings(BaseModel):
     core_seed_hex: str | None = None  # ed25519 seed; generated + persisted if None
     ui_dir: Path | None = None  # built UI (apps/ui/dist); served at / when set
     cors_origins: list[str] = Field(default_factory=list)  # dev UI origins, e.g. http://localhost:5173
+    # LAN access from phones/tablets: bind 0.0.0.0 + tls=true (browser mic needs https).
+    tls: bool = False
+    tls_dir: Path = Path("data/tls")          # self-signed cert/key minted here on first start
+    tls_cert: Path | None = None              # bring your own (mkcert / real CA); overrides tls_dir
+    tls_key: Path | None = None
 
     # actions / permissions
     approval_ttl_s: float = 60.0
@@ -66,9 +71,14 @@ class Settings(BaseModel):
     @classmethod
     def load(cls, path: str | os.PathLike[str] | None = None) -> Settings:
         data: dict[str, Any] = {}
-        cfg = Path(path or os.environ.get("HEREN_CONFIG", "heren.yaml"))
+        explicit = path or os.environ.get("HEREN_CONFIG")
+        cfg = Path(explicit or "heren.yaml")
         if cfg.exists():
             data.update(yaml.safe_load(cfg.read_text()) or {})
+        elif explicit:
+            # A named config that is missing must fail loudly: otherwise Heren boots mute (voice=none)
+            # and the operator finds out much later.
+            raise FileNotFoundError(f"HEREN_CONFIG points to a missing file: {cfg}")
         for name, field in cls.model_fields.items():
             env = os.environ.get(f"HEREN_{name.upper()}")
             if env is not None:

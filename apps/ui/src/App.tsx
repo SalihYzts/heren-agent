@@ -62,7 +62,8 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
     toastTimer.current = window.setTimeout(() => setToast(null), 4000)
   }, [])
 
-  const voice = useVoice(api)
+  const choice = useMemo(() => ({ model: settings.model, provider: settings.provider }), [settings.model, settings.provider])
+  const voice = useVoice(api, undefined, choice)
   const onEvent = useCallback((e: Parameters<typeof dispatch>[0]) => { dispatch(e); voice.handleEvent(e) }, [voice.handleEvent])
   useEffect(() => connectEvents(apiKey, onEvent), [apiKey, onEvent])
 
@@ -106,7 +107,8 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
     if (!r) return
     if (r.active || r.pending) r.stop(); else r.start()
   }, [api, say, voice.recorder])
-  const onAsk = useCallback((text: string) => { api.ask(text).catch(e => say(`soru: ${(e as Error).message}`, true)) }, [api, say])
+  const onAsk = useCallback((text: string) => { api.ask(text, choice).catch(e => say(`soru: ${(e as Error).message}`, true)) }, [api, say, choice])
+  const fetchQr = useCallback((u: string) => api.qr(u), [api])
 
   const listening = !!voice.recorder?.active
   const navBtn = (v: View, label: string) => (
@@ -131,7 +133,8 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
         <div className="home" hidden={view !== 'home'}>
           <section className="half half-heren" aria-label="Heren">
             <CharacterPanel state={state.character} onTouch={onTouch} packUrl={packForLook(settings.look)}
-              listening={listening} level={voice.recorder?.level ?? 0} />
+              listening={listening} level={voice.recorder?.level ?? 0} wave={voice.recorder?.wave ?? []}
+              speaking={voice.speech.speaking} speechWave={voice.speechWave} />
             <VoiceBar voice={state.voice} speaking={voice.speech.speaking} queued={voice.speech.queued}
               recorder={voice.recorder} onStop={voice.stopSpeaking} />
             <Conversation rows={state.conversation} hermes={state.hermes} onAsk={onAsk} />
@@ -161,7 +164,7 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
           {tab === 'activity' ? <Activity rows={state.activity} deviceNames={names} /> : <Audit rows={audit} deviceNames={names} />}
         </section>}
 
-        {view === 'settings' && <SettingsView settings={settings} devices={paired} serverId={serverId} onChange={onSettings} onLogout={onLogout} />}
+        {view === 'settings' && <SettingsView settings={settings} devices={paired} serverId={serverId} access={state.access} fetchQr={fetchQr} onChange={onSettings} onLogout={onLogout} />}
 
         {showApprovals && <aside className="approval-inspector" id="approval-inspector" aria-label="Onaylar">
           <div className="section-heading"><h2>İşlem onayları</h2><button className="btn" onClick={() => setShowApprovals(false)}>Kapat</button></div>

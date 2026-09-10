@@ -158,3 +158,32 @@ def test_ask_and_transcribe_accept_a_model_choice(settings, monkeypatch):
         r = client.post("/api/ask", headers=H, json={"text": "selam"})
         assert r.status_code == 200
     assert seen == [("selam", "gpt-4.1", "copilot"), ("selam", None, None)]
+
+
+def test_state_exposes_lan_access_urls_for_phones(settings, monkeypatch):
+    monkeypatch.setattr("heren_core.netaccess._all_ipv4", lambda: ["127.0.0.1", "192.168.1.150"])
+    monkeypatch.setattr("heren_core.netaccess._hostname", lambda: "server")
+    app = create_app(settings.model_copy(update={"host": "0.0.0.0", "tls": True}))
+    with TestClient(app) as client:
+        acc = client.get("/api/state", headers=H).json()["access"]
+    assert acc["urls"] == ["https://192.168.1.150:8700", "https://server.local:8700"]
+    assert acc["tls"] is True
+
+
+def test_qr_endpoint_renders_the_first_access_url_as_svg(settings, monkeypatch):
+    monkeypatch.setattr("heren_core.netaccess._all_ipv4", lambda: ["192.168.1.150"])
+    monkeypatch.setattr("heren_core.netaccess._hostname", lambda: "server")
+    app = create_app(settings.model_copy(update={"host": "0.0.0.0", "tls": True}))
+    with TestClient(app) as client:
+        r = client.get("/api/access/qr.svg", headers=H)
+        assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg+xml")
+        assert 'xmlns="http://www.w3.org/2000/svg"' in r.text   # standalone image (blob url in <img>), not inline markup
+        assert b"<svg" in r.content
+        # decode it back: the QR must encode exactly the first access url
+        import segno.helpers  # noqa: F401  (segno present)
+        r2 = client.get("/api/access/qr.svg?url=https://server.local:8700", headers=H)
+        assert r2.status_code == 200 and r2.content != r.content
+        # loopback-only core has nothing to advertise
+    app2 = create_app(settings)
+    with TestClient(app2) as client:
+        assert client.get("/api/access/qr.svg", headers=H).status_code == 404

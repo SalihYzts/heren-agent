@@ -3,6 +3,7 @@ import type { CharacterState } from '../lib/types'
 import { AsciiCharacterRenderer } from '../character/AsciiCharacterRenderer'
 import { defaultPack } from '../character/defaultPack'
 import { loadPack, type LoadedPack } from '../character/loadPack'
+import { Waveform } from './Waveform'
 
 interface Props {
   state: CharacterState
@@ -10,6 +11,9 @@ interface Props {
   packUrl?: string
   listening?: boolean       // mic is open (recorder active) — drawn on the stage as feedback
   level?: number            // 0..1 mic level while listening
+  wave?: number[]           // recent mic levels → green wave in front of Heren
+  speaking?: boolean        // Heren's clip is playing
+  speechWave?: number[]     // Heren's playback levels → wave behind Heren, theme colour
 }
 
 export const PACK_URL = '/character/heren.json'
@@ -22,7 +26,7 @@ const MOOD_TR: Record<CharacterState['mood'], string> = {
   neutral: '', happy: 'keyfi yerinde', sleepy: 'uykulu', annoyed: 'sinirli', confused: 'kafası karışık',
 }
 
-export function CharacterPanel({ state, onTouch, packUrl = PACK_URL, listening = false, level = 0 }: Props) {
+export function CharacterPanel({ state, onTouch, packUrl = PACK_URL, listening = false, level = 0, wave = [], speaking = false, speechWave = [] }: Props) {
   const [loaded, setLoaded] = useState<LoadedPack>({ pack: defaultPack, source: 'builtin' })
   useEffect(() => { let on = true; loadPack(packUrl).then(p => { if (on) setLoaded(p) }); return () => { on = false } }, [packUrl])
   const sleeping = state.activity === 'sleeping'
@@ -34,9 +38,11 @@ export function CharacterPanel({ state, onTouch, packUrl = PACK_URL, listening =
       <button type="button" className={`character-b ${sleeping ? 'is-sleeping' : ''} ${listening ? 'is-listening' : ''}`}
         onClick={onTouch} aria-label={listening ? 'Dinlemeyi bitir ve gönder' : sleeping ? 'Heren’i uyandır' : 'Heren’e dokun, konuş'}>
         <div className="character-stage" style={{ aspectRatio: `${aspect}` }} data-testid="character-stage">
+          <Waveform levels={speechWave} active={speaking && !listening} tone="heren" className="wave-behind" />
           <AsciiCharacterRenderer pack={loaded.pack} activity={listening ? 'listening' : state.activity} mood={state.mood} energy={state.energy} className="character-art" />
           {sleeping && !listening && <div className="zzz mono" aria-hidden>z<span>z</span><span>z</span></div>}
           {listening && <div className="listen-ring" aria-hidden style={{ opacity: 0.35 + level * 0.65 }} />}
+          <Waveform levels={wave} active={listening} tone="user" className="wave-front" />
         </div>
         <div className="character-caption" aria-live="polite">
           <span className={`caption-dot ${listening ? 'live' : ''}`} aria-hidden />

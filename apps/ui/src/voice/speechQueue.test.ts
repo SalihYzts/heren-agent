@@ -1,7 +1,7 @@
 // SpeechQueue: plays voice.speech clips strictly in (run_id, seq) order through an
 // injected Player; voice.stopped cuts the current clip and clears the rest.
-import { describe, expect, it } from 'vitest'
-import { SpeechQueue, type Player } from './speechQueue'
+import { describe, expect, it, vi } from 'vitest'
+import { SpeechQueue, type Player, audioPlayer } from './speechQueue'
 
 class FakePlayer implements Player {
   played: string[] = []
@@ -73,5 +73,26 @@ describe('SpeechQueue', () => {
     const q = new SpeechQueue(failing)
     q.handle(speech('r1', 0)); q.handle(speech('r1', 1)); await tick(); await tick()
     expect((failing as unknown as { played: string[] }).played).toEqual(['/a/r1-0.wav', '/a/r1-1.wav'])
+  })
+})
+
+describe('audioPlayer level tap', () => {
+  it('reports a 0..1 level while a clip plays and 0 when it ends', async () => {
+    const levels: number[] = []
+    const analyser = { fftSize: 0, getByteTimeDomainData: (a: Uint8Array) => { a.fill(128 + 40) }, connect: vi.fn() }
+    const ctx = { createMediaElementSource: () => ({ connect: vi.fn() }), createAnalyser: () => analyser, destination: {}, resume: vi.fn(), state: 'running' }
+    vi.stubGlobal('AudioContext', class { constructor() { return ctx } })
+    vi.stubGlobal('requestAnimationFrame', (fn: () => void) => setTimeout(fn, 1) as unknown as number)   // macrotask: lets 'ended' fire
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id))
+    class FakeAudio { src: string; onended: (() => void) | null = null; onerror: null = null; onpause: null = null; currentTime = 0; duration = 1
+      constructor(src: string) { this.src = src } play() { setTimeout(() => this.onended?.(), 30); return Promise.resolve() } pause() {} }
+    vi.stubGlobal('Audio', FakeAudio)
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() })
+    const p = audioPlayer(async () => new Blob(['x']), l => levels.push(l))
+    await p.play('/clip.wav')
+    expect(levels.length).toBeGreaterThan(0)
+    expect(Math.max(...levels)).toBeGreaterThan(0.2)          // 40/128 ≈ 0.31 amplitude
+    expect(levels.at(-1)).toBe(0)                              // reset when done
+    vi.unstubAllGlobals()
   })
 })

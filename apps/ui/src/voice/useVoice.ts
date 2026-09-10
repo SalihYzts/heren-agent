@@ -6,8 +6,12 @@ import type { Event } from '../lib/types'
 import type { Recorder } from '../components/VoiceBar'
 import { SpeechQueue, audioPlayer, type SpeechState } from './speechQueue'
 import { encodeWav } from './wav'
+import { SilenceDetector } from './silence'
 
 const STT_RATE = 16000
+const WAVE_LEN = 48                       // samples kept for the waveform ring
+// speak → quiet for 1.5 s → auto-send; nothing said for 15 s → stop quietly
+const SILENCE = { threshold: 0.06, holdMs: 1500, minSpeechMs: 300, maxMs: 15000 }
 
 /** Turkish, actionable message for a getUserMedia failure. */
 export function micErrorMessage(e: unknown): string {
@@ -18,11 +22,13 @@ export function micErrorMessage(e: unknown): string {
   return `Mikrofon açılamadı: ${(e as Error)?.message ?? 'bilinmeyen hata'}`
 }
 
-interface Media { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; chunks: Float32Array[] }
+interface Media { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; chunks: Float32Array[]; silence: SilenceDetector }
 
-export function useVoice(api: Api, onTranscribed?: (text: string) => void) {
+export function useVoice(api: Api, onTranscribed?: (text: string) => void, choice?: { model?: string; provider?: string }) {
   const [speech, setSpeech] = useState<SpeechState>({ speaking: false, queued: 0 })
-  const queue = useMemo(() => new SpeechQueue(audioPlayer(url => api.clip(url))), [api])
+  const [speechWave, setSpeechWave] = useState<number[]>([])
+  const queue = useMemo(() => new SpeechQueue(audioPlayer(url => api.clip(url), lvl =>
+    setSpeechWave(w => lvl === 0 && w.length === 0 ? w : lvl === 0 ? [] : [...w.slice(-(WAVE_LEN - 1)), lvl]))), [api])
   useEffect(() => {
     let was = false
     return queue.onChange(s => {
@@ -41,6 +47,8 @@ export function useVoice(api: Api, onTranscribed?: (text: string) => void) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const [level, setLevel] = useState(0)
+  const [wave, setWave] = useState<number[]>([])
+  const stopRef = useRef<() => void>(() => {})
   const starting = useRef(false)
   const generation = useRef(0)
   const media = useRef<Media | null>(null)
@@ -67,15 +75,21 @@ export function useVoice(api: Api, onTranscribed?: (text: string) => void) {
       const src = ctx.createMediaStreamSource(stream)
       const node = ctx.createScriptProcessor(4096, 1, 1)
       const chunks: Float32Array[] = []
+      const silence = new SilenceDetector(SILENCE)
       node.onaudioprocess = ev => {
         const buf = new Float32Array(ev.inputBuffer.getChannelData(0))
         chunks.push(buf)
         let sum = 0
         for (let i = 0; i < buf.length; i += 16) sum += buf[i] * buf[i]
-        setLevel(Math.min(1, Math.sqrt(sum / (buf.length / 16)) * 4))   // RMS → 0..1 feedback
+        const lvl = Math.min(1, Math.sqrt(sum / (buf.length / 16)) * 4)   // RMS → 0..1 feedback
+        setLevel(lvl)
+        setWave(w => [...w.slice(-(WAVE_LEN - 1)), lvl])
+        const verdict = silence.feed(lvl, performance.now())
+        if (verdict === 'send') stopRef.current()
+        else if (verdict === 'timeout') { setError('Ses duyamadım. Heren’e dokunup tekrar dene.'); stopRef.current() }
       }
       src.connect(node); node.connect(ctx.destination)
-      media.current = { ctx, stream, node, chunks }
+      media.current = { ctx, stream, node, chunks, silence }
       setActive(true)
     } catch (e) {
       setError(micErrorMessage(e))
@@ -91,29 +105,31 @@ export function useVoice(api: Api, onTranscribed?: (text: string) => void) {
     const m = media.current
     if (!m) return
     media.current = null
-    setActive(false); setLevel(0)
+    setActive(false); setLevel(0); setWave([])
     const rate = m.ctx.sampleRate
     release(m)
     const wav = encodeWav(m.chunks, STT_RATE, rate)
     if (wav.byteLength <= 44 + STT_RATE * 2 * 0.3) { setError('Çok kısa kayıt. Konuşmaya başla, bitince tekrar dokun.'); return }
     setBusy(true)
     try {
-      const r = await api.transcribe(wav, true)
+      const r = await api.transcribe(wav, true, choice)
       if (!r.text.trim()) { setError('Söylediğin anlaşılamadı. Biraz daha yakından ve net konuşup tekrar dene.'); return }
       onTranscribed?.(r.text)
       if (r.asked && r.ask && !r.ask.ok) setError(`Heren cevap veremedi: ${r.ask.error ?? 'bilinmeyen hata'}`)
     } catch (e) {
       setError(`Ses gönderilemedi: ${(e as Error).message}. Sunucu bağlantısını kontrol et.`)
     } finally { setBusy(false) }
-  }, [api, onTranscribed, release])
+  }, [api, onTranscribed, release, choice])
+
+  stopRef.current = () => { void stop() }
 
   // unmount: never leave the mic open
   useEffect(() => () => { ++generation.current; const m = media.current; media.current = null; release(m) }, [release])
 
   const recorder: Recorder | null = hasMic
-    ? { start: () => { void start() }, stop: () => { void stop() }, active, pending, busy, error, level }
+    ? { start: () => { void start() }, stop: () => { void stop() }, active, pending, busy, error, level, wave }
     : null
   const stopSpeaking = useCallback(() => { queue.handle({ type: 'voice.interrupt', payload: {}, ts: Date.now() / 1000 }); void api.voiceStop().catch(() => {}) }, [api, queue])
 
-  return { speech, handleEvent, recorder, stopSpeaking }
+  return { speech, handleEvent, recorder, stopSpeaking, speechWave }
 }

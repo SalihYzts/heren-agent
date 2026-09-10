@@ -83,7 +83,7 @@ it('sends one WAV, locks while transcribing, and surfaces actionable errors', as
   act(() => processAudio!({ inputBuffer: { getChannelData: () => new Float32Array(24000) } }))
   await act(async () => { result.current.recorder!.stop(); result.current.recorder!.stop() })
   expect(api.transcribe).toHaveBeenCalledOnce()
-  expect(api.transcribe).toHaveBeenCalledWith(expect.any(ArrayBuffer), true)
+  expect(api.transcribe).toHaveBeenCalledWith(expect.any(ArrayBuffer), true, undefined)
   expect(result.current.recorder?.busy).toBe(true)
   act(() => result.current.recorder!.start())
   expect(getUserMedia).toHaveBeenCalledOnce()
@@ -93,4 +93,23 @@ it('sends one WAV, locks while transcribing, and surfaces actionable errors', as
   expect(onText).not.toHaveBeenCalled()
   expect(trackStop).toHaveBeenCalledOnce()
   expect(close).toHaveBeenCalledOnce()
+})
+it('auto-sends after the user speaks and then stays quiet; exposes a waveform ring', async () => {
+  vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout', 'Date'] })
+  try {
+    getUserMedia.mockResolvedValue(stream)
+    const api = apiMock()
+    const { result } = renderHook(() => useVoice(api))
+    await act(async () => result.current.recorder!.start())
+    const loud = { inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.3) } }
+    const quiet = { inputBuffer: { getChannelData: () => new Float32Array(4096) } }
+    for (let i = 0; i < 8; i++) { act(() => processAudio!(loud)); vi.advanceTimersByTime(100) }     // 800 ms speech
+    expect(result.current.recorder?.wave?.length).toBeGreaterThan(4)
+    expect(Math.max(...(result.current.recorder!.wave ?? []))).toBeGreaterThan(0.2)
+    for (let i = 0; i < 12; i++) { act(() => processAudio!(quiet)); vi.advanceTimersByTime(100) }   // 1.2 s quiet
+    expect(api.transcribe).not.toHaveBeenCalled()
+    for (let i = 0; i < 6 && processAudio; i++) { await act(async () => { processAudio?.(quiet); vi.advanceTimersByTime(100) }) } // → 1.8 s (stops once released)
+    expect(api.transcribe).toHaveBeenCalledOnce()
+    expect(result.current.recorder?.active).toBe(false)
+  } finally { vi.useRealTimers() }
 })

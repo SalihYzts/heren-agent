@@ -8,6 +8,7 @@ export interface Recorder {
   busy?: boolean
   error?: string
   level?: number
+  wave?: number[]        // recent levels, oldest → newest (for the waveform)
 }
 
 interface Props {

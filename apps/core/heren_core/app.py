@@ -22,6 +22,7 @@ Routes:
 from __future__ import annotations
 
 import asyncio
+import io
 import contextlib
 import logging
 import time
@@ -37,6 +38,7 @@ from heren_core.actions import ActionService, ApprovalNotFound
 from heren_core.bus import EventBus
 from heren_core.character_host import CharacterHost
 from heren_core.config import Settings
+from heren_core.netaccess import access_urls
 from heren_core.gateway import DeviceGateway
 from heren_core.hermes_bridge import HermesBridge
 from heren_core.mcp_server import BearerGate, build_mcp_server
@@ -305,11 +307,26 @@ def create_app(settings: Settings) -> FastAPI:
             "hermes": {"endpoint": settings.hermes_endpoint, "reachable": await core.hermes.healthy()},
             "voice": {"tts": core.voice.tts.name if core.voice else "none",
                       "stt": core.voice.stt.name if core.voice else "none", "language": settings.language},
+            "access": {"urls": access_urls(settings), "tls": settings.tls},
         }
 
     @app.get("/api/state", dependencies=[Depends(auth)])
     async def state() -> dict[str, Any]:
         return await _snapshot()
+
+    @app.get("/api/access/qr.svg", dependencies=[Depends(auth)])
+    async def access_qr(url: str | None = None) -> Response:
+        """QR for the phone: encodes the first LAN url (or ?url=…, restricted to our own urls)."""
+        urls = access_urls(settings)
+        if not urls:
+            raise HTTPException(404, "not reachable from the LAN (bound to loopback)")
+        target = url if url in urls else urls[0]
+        import segno
+        buf = io.BytesIO()
+        # full document (xmlns + xml decl): it is served as an image, not pasted inline
+        segno.make(target, error="m").save(buf, kind="svg", scale=6, dark="#000", light=None, border=2)
+        svg = buf.getvalue()
+        return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=60"})
 
     async def _ask(text: str, model: str | None = None, provider: str | None = None) -> dict[str, Any]:
         assert core.hermes and core.character

@@ -11,6 +11,7 @@ import io
 import json
 import os
 from pathlib import Path
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,9 @@ import websockets
 ROOT = Path(__file__).resolve().parents[3]
 BASE, KEY = sys.argv[1:3]
 PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 9336
+# Heren runs behind its own self-signed cert for LAN phones; the harness trusts it explicitly.
+INSECURE = ssl.create_default_context(); INSECURE.check_hostname = False; INSECURE.verify_mode = ssl.CERT_NONE
+WS_SSL = INSECURE if BASE.startswith('https') else None
 CHROME = Path.home() / '.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'
 OUT = Path('/tmp/heren-redesign-e2e')
 OUT.mkdir(exist_ok=True)
@@ -47,8 +51,9 @@ def make_question(path):
         rate = wav.getframerate()
         x = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16)
     samples = np.interp(np.arange(int(len(x) * 48000 / rate)) * rate / 48000, np.arange(len(x)), x)
-    # Leading/trailing silence avoids device startup cutting the first word.
-    audio = np.concatenate([np.zeros(24000), samples, np.zeros(24000)]).astype('<i2')
+    # Leading silence avoids device startup cutting the first word; the file is played once (%noloop),
+    # after which the fake mic is silent → the app's silence detector must auto-send.
+    audio = np.concatenate([np.zeros(24000), samples, np.zeros(4800)]).astype('<i2')
     with wave.open(str(path), 'wb') as wav:
         wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(48000)
         wav.writeframes(audio.tobytes())
@@ -63,7 +68,8 @@ async def main():
             str(CHROME), '--headless=new', '--no-sandbox', '--disable-gpu',
             f'--remote-debugging-port={PORT}', f'--user-data-dir={profile}',
             '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
-            f'--use-file-for-fake-audio-capture={mic}', 'about:blank',
+            f'--use-file-for-fake-audio-capture={mic}%noloop', '--ignore-certificate-errors',
+            '--autoplay-policy=no-user-gesture-required', 'about:blank',
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             tabs = None
@@ -80,6 +86,7 @@ async def main():
             async with websockets.connect(page['webSocketDebuggerUrl'], max_size=2**26) as ws:
                 serial = 0
                 exceptions = []
+                requests = []
 
                 async def send(method, **params):
                     nonlocal serial
@@ -90,6 +97,8 @@ async def main():
                         if message.get('method') == 'Runtime.exceptionThrown':
                             d = message['params']['exceptionDetails']
                             exceptions.append((d.get('text') or '') + ' ' + str((d.get('exception') or {}).get('description', ''))[:300])
+                        if message.get('method') == 'Network.requestWillBeSent':
+                            requests.append(message['params']['request']['url'])
                         if message.get('id') == serial:
                             if 'error' in message:
                                 raise RuntimeError(message['error'])
@@ -120,12 +129,21 @@ async def main():
 
                 await send('Runtime.enable')
                 await send('Page.enable')
+                await send('Network.enable')
                 await send('Emulation.setDeviceMetricsOverride', width=1440, height=960, deviceScaleFactor=1, mobile=False)
                 await send('Page.navigate', url=BASE)
                 check(await wait("location.origin !== 'null' && document.readyState === 'complete'"), 'app loaded')
+                check(await js("isSecureContext"), 'page is a secure context (mic allowed on phones): ' + BASE)
                 await js(f"sessionStorage.setItem('heren.api_key', {json.dumps(KEY)})")
                 await send('Page.addScriptToEvaluateOnNewDocument', source="""
                     window.__plays = []; window.__ended = 0; window.__micTracks = [];
+                    // record how far each waveform swung (0..50 in the 300x100 viewBox) while it was active
+                    window.__waveMax = { user: 0, heren: 0 };
+                    setInterval(() => { for (const tone of ['user', 'heren']) {
+                      const s = document.querySelector(`svg.wave[data-tone=${tone}]`); if (!s || s.dataset.active !== 'true') continue;
+                      const d = s.querySelector('path')?.getAttribute('d') || '';
+                      const ys = [...d.matchAll(/,([\\d.]+)/g)].map(m => +m[1]); if (!ys.length) continue;
+                      const dev = Math.max(...ys.map(y => Math.abs(y - 50))); if (dev > window.__waveMax[tone]) window.__waveMax[tone] = dev; } }, 40);
                     const play = HTMLMediaElement.prototype.play;
                     HTMLMediaElement.prototype.play = function() {
                       window.__plays.push(this.src); this.addEventListener('ended', () => window.__ended++, {once:true});
@@ -163,12 +181,22 @@ async def main():
                 check(await wait("document.documentElement.dataset.theme === 'paper' && getComputedStyle(document.body).backgroundColor !== 'rgb(10, 10, 10)'"), 'theme switch repaints immediately')
                 await shot('02-settings-paper')
                 await js("[...document.querySelectorAll('input[name=theme]')].find(r => r.value === 'nothing').click()")
+                # phone access + model choice + feature guide live in settings
+                access = await js("JSON.stringify([...document.querySelectorAll('.access-urls a')].map(a => a.href))")
+                print('ACCESS ' + str(access), flush=True)
+                check(access and access != '[]' and 'https://' in access, 'settings show the LAN https address for phones')
+                check(await wait("(() => { const i = document.querySelector('img.access-qr'); return !!i?.currentSrc && i.complete && i.naturalWidth > 0 })()"), 'settings render a QR for the phone address (image decodes)')
+                await js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Neler yapabilir?').click()")
+                check(await wait("document.querySelectorAll('.guide-list dt').length >= 8"), 'feature guide lists what Heren can do')
+                for label, value in (('Model', 'gpt-4.1'), ('Sağlayıcı', 'copilot')):
+                    await js(f"(() => {{ const i = document.querySelector('input[aria-label={json.dumps(label)}]'); const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(i, {json.dumps(value)}); i.dispatchEvent(new Event('input', {{bubbles: true}})) }})()")
+                check(await js("JSON.parse(localStorage.getItem('heren.settings.v1') || '{}').model === 'gpt-4.1'"), 'model choice persisted in settings')
                 await click('Ana ekran')
-                urllib.request.urlopen(urllib.request.Request(BASE + '/api/voice/stop', method='POST', headers={'Authorization': 'Bearer ' + KEY}), timeout=5).read()  # quiet leftovers from earlier runs
+                urllib.request.urlopen(urllib.request.Request(BASE + '/api/voice/stop', method='POST', headers={'Authorization': 'Bearer ' + KEY}), timeout=5, context=INSECURE).read()  # quiet leftovers from earlier runs
                 # listen to the core bus in parallel: proves the browser really played (voice.playback.* come FROM the browser)
                 bus = []
                 async def listen():
-                    async with websockets.connect(BASE.replace('http', 'ws') + '/ws/events?token=' + KEY) as w:
+                    async with websockets.connect(BASE.replace('http', 'ws') + '/ws/events?token=' + KEY, ssl=WS_SSL) as w:
                         async for m in w: bus.append(json.loads(m)['type'])
                 bus_task = asyncio.create_task(listen()); await asyncio.sleep(.3)
                 # tap Heren → mic opens, screen says it is listening
@@ -181,15 +209,24 @@ async def main():
                 lvl = await js("+document.querySelector('meter').value")
                 print(f'MIC LEVEL {lvl:.3f}', flush=True)
                 check(lvl > 0.01, 'level meter reacts to real microphone input')
+                check(await js("document.querySelector('svg.wave[data-tone=user]').dataset.active === 'true' && document.querySelector('svg.wave[data-tone=heren]').dataset.active === 'false'"), 'green user wave in front of Heren while listening (Heren wave off)')
                 await shot('03-listening')
-                await asyncio.sleep(max(0, duration - 1.0))
-                await js("document.querySelector('[data-testid=character-stage]').click()")   # tap again = send
-                check(await wait("document.querySelector('[data-testid=voice-status]')?.dataset.listening === 'false' && !document.querySelector('meter') && !document.querySelector('.listen-ring')"), 'second tap ends listening (ring + meter gone)')
+                # NO second tap: the user stops talking and Heren sends by itself (speech → 1.5 s quiet)
+                t0 = time.monotonic()
+                check(await wait("document.querySelector('[data-testid=voice-status]')?.dataset.listening === 'false' && !document.querySelector('meter') && !document.querySelector('.listen-ring')", duration + 6), 'silence after speech auto-sends (no second tap; ring + meter gone)')
+                print(f'AUTO-SEND after {time.monotonic() - t0:.1f}s (clip {duration:.1f}s)', flush=True)
+                check(time.monotonic() - t0 < duration + 3.5, 'auto-send fired within ~1.5 s of the user going quiet')
+                wave_user = await js('window.__waveMax.user')
+                print(f'WAVE user max swing {wave_user:.1f}/50', flush=True)
+                check(wave_user > 3, 'user wave actually moved with the voice')
                 tracks = await js("JSON.stringify((window.__micTracks || []).map(t => t.readyState))")
                 print('MIC tracks after send: ' + str(tracks), flush=True)
                 if tracks != '[]':
                     check(await wait("window.__micTracks.every(t => t.readyState === 'ended')"), 'microphone tracks released after send')
                 check(await wait("document.querySelector('[data-testid=voice-transcript]')?.textContent.toLocaleLowerCase('tr').includes('kimsin')", 180), 'real STT understood microphone input')
+                sent = [u for u in requests if '/api/voice/transcribe' in u]
+                print('TRANSCRIBE ' + json.dumps(sent), flush=True)
+                check(sent and 'model=gpt-4.1' in sent[-1] and 'provider=copilot' in sent[-1], 'chosen model travels with the voice question')
                 check(await wait("!!document.querySelector('.conv-row.heren .text')", 180), 'real Hermes response in conversation')
                 print('ANSWER ' + str(await js("document.querySelector('.conv-row.heren .text').textContent")), flush=True)
                 answer = await js("document.querySelector('.conv-row.heren .text').textContent")
@@ -207,6 +244,10 @@ async def main():
                 check('voice.playback.started' in bus, 'browser reported playback started (its <audio> really played)')
                 check('voice.playback.finished' in bus, 'browser reported playback finished')
                 check(await wait("document.querySelector('[data-testid=voice-status]').dataset.speaking === '0'", 10), 'voice bar back to quiet after playback')
+                wave_heren = await js('window.__waveMax.heren')
+                print(f'WAVE heren max swing {wave_heren:.1f}/50', flush=True)
+                check(wave_heren > 1, 'Heren wave behind the art moved while the answer played')
+                check(await js("document.querySelector('svg.wave[data-tone=heren]').dataset.active === 'false'"), 'Heren wave off after playback')
                 bus_task.cancel()
                 print('AUDIO ended events: ' + str(await js('window.__ended')), flush=True)
                 await shot('04-answer')

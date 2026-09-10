@@ -42,6 +42,7 @@ export interface State {
   hermes: HermesStatus
   conversation: ConversationRow[]
   voice: VoiceStatus
+  access: { urls: string[]; tls: boolean }
 }
 
 export const defaultCharacter: CharacterState = {
@@ -52,6 +53,7 @@ export const initialState: State = {
   connected: false, devices: {}, metrics: {}, approvals: [], activity: [], character: defaultCharacter,
   hermes: { reachable: null, busy: false, tool: null }, conversation: [],
   voice: { tts: 'none', stt: 'none', language: 'tr', transcript: null, error: null },
+  access: { urls: [], tls: false },
 }
 
 const CONVERSATION_CAP = 100
@@ -87,6 +89,7 @@ export function reduce(s: State, e: Event): State {
         character: (p.character as CharacterState) ?? s.character,
         hermes: p.hermes ? { ...s.hermes, reachable: !!p.hermes.reachable, endpoint: p.hermes.endpoint } : s.hermes,
         voice: p.voice ? { ...s.voice, tts: String(p.voice.tts), stt: String(p.voice.stt), language: String(p.voice.language ?? s.voice.language) } : s.voice,
+        access: p.access ? { urls: Array.isArray(p.access.urls) ? p.access.urls.map(String) : [], tls: !!p.access.tls } : s.access,
       }
     }
 

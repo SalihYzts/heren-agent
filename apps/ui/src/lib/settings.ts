@@ -8,6 +8,8 @@ export interface Settings {
   theme: ThemeId
   look: LookId
   server: string | null    // device_id of "the server" on the home screen; null = first paired device
+  model: string            // Hermes model for this panel ('' = gateway default)
+  provider: string         // Hermes provider slug ('' = gateway default)
 }
 
 export const THEMES: Array<{ id: ThemeId; label: string; hint: string }> = [
@@ -22,7 +24,7 @@ export const LOOKS: Array<{ id: LookId; label: string; pack: string; hint: strin
 ]
 
 const STORAGE = 'heren.settings.v1'
-const DEFAULTS: Settings = { theme: 'nothing', look: 'heren', server: null }
+const DEFAULTS: Settings = { theme: 'nothing', look: 'heren', server: null, model: '', provider: '' }
 
 export function loadSettings(): Settings {
   try {
@@ -30,7 +32,9 @@ export function loadSettings(): Settings {
     const theme = THEMES.some(t => t.id === raw.theme) ? raw.theme as ThemeId : DEFAULTS.theme
     const look = LOOKS.some(l => l.id === raw.look) ? raw.look as LookId : DEFAULTS.look
     const server = typeof raw.server === 'string' && raw.server ? raw.server : null
-    return { theme, look, server }
+    const model = typeof raw.model === 'string' ? raw.model.trim() : ''
+    const provider = typeof raw.provider === 'string' ? raw.provider.trim() : ''
+    return { theme, look, server, model, provider }
   } catch { return { ...DEFAULTS } }
 }
 

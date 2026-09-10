@@ -35,14 +35,26 @@ export class Api {
     this.req<ActionResult>('POST', `/api/approvals/${id}/deny`, { denied_by })
   audit = (limit = 100) => this.req<AuditRow[]>('GET', `/api/audit?limit=${limit}`)
   touch = () => this.req<CharacterState>('POST', '/api/character/touch')
-  ask = (text: string) => this.req<{ ok: boolean; text: string; error: string | null }>('POST', '/api/ask', { text })
+  ask = (text: string, choice?: { model?: string; provider?: string }) =>
+    this.req<{ ok: boolean; text: string; error: string | null }>('POST', '/api/ask', {
+      text, ...(choice?.model ? { model: choice.model } : {}), ...(choice?.provider ? { provider: choice.provider } : {}),
+    })
+  /** Authenticated QR (SVG) for the phone; the caller turns the blob into an object URL. */
+  qr = async (url?: string) => {
+    const r = await fetch(`${this.base}/api/access/qr.svg${url ? `?url=${encodeURIComponent(url)}` : ''}`, { headers: { Authorization: `Bearer ${this.key}` } })
+    if (!r.ok) throw new ApiError(r.status, r.statusText)
+    return r.blob()
+  }
 
   // ---- voice ----
   voiceStop = () => this.req<{ ok: boolean }>('POST', '/api/voice/stop')
   playback = (state: 'started' | 'finished', clip_id?: string) =>
     this.req<{ ok: boolean }>('POST', '/api/voice/playback', { state, clip_id })
-  transcribe = async (wav: ArrayBuffer, ask = false) => {
-    const r = await fetch(`${this.base}/api/voice/transcribe?ask=${ask}`, {
+  transcribe = async (wav: ArrayBuffer, ask = false, choice?: { model?: string; provider?: string }) => {
+    const q = new URLSearchParams({ ask: String(ask) })
+    if (choice?.model) q.set('model', choice.model)
+    if (choice?.provider) q.set('provider', choice.provider)
+    const r = await fetch(`${this.base}/api/voice/transcribe?${q}`, {
       method: 'POST', headers: { Authorization: `Bearer ${this.key}`, 'Content-Type': 'audio/wav' }, body: wav,
     })
     if (!r.ok) throw new ApiError(r.status, r.statusText)

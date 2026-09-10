@@ -129,3 +129,10 @@ describe('store reducer', () => {
     expect(s.hermes.reachable).toBe(true)
   })
 })
+
+describe('access urls in the snapshot', () => {
+  it('keeps the phone/tablet urls from ui.snapshot', () => {
+    const s = reduce(initialState, { type: 'ui.snapshot', ts: 1, payload: { devices: [], approvals: [], access: { urls: ['https://192.168.1.5:8700', 'https://box.local:8700'], tls: true } } })
+    expect(s.access).toEqual({ urls: ['https://192.168.1.5:8700', 'https://box.local:8700'], tls: true })
+  })
+})

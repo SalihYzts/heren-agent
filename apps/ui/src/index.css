@@ -106,6 +106,20 @@ label.field, .shortcut-form label { display: grid; gap: 4px; font-size: 12px; co
 .character-b:hover .character-stage { border-color: var(--line-strong); }
 .character-b:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .character-stage { position: relative; width: 100%; max-height: min(52vh, 460px); margin: 0 auto; overflow: hidden; border: 1px solid var(--line); background: var(--stage); }
+/* waves: Heren's behind the art (theme fg), the user's in front (green) */
+.wave { position: absolute; left: 0; right: 0; top: 18%; height: 64%; width: 100%; pointer-events: none; transition: opacity 250ms linear; }
+.wave[data-active="false"] { opacity: 0; }
+.wave-behind { z-index: 0; }
+.character-stage > pre { position: relative; z-index: 1; }
+.wave-front { z-index: 2; }
+.wave .wave-axis { stroke: currentColor; stroke-width: .5; opacity: .35; }
+.wave .wave-fill { fill: currentColor; opacity: .55; }
+.wave[data-tone="user"] { color: var(--ok); }
+.wave[data-tone="heren"] { color: var(--fg); }
+.wave[data-tone="heren"] .wave-fill { opacity: .3; }          /* behind the art: quieter than the user's */
+[data-theme="paper"] .wave[data-tone="heren"] { color: #f2f0ea; }
+[data-theme="ember"] .wave[data-tone="heren"] { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .wave { transition: none; } }
 .character-art { color: var(--fg); transition: color 300ms linear, opacity 600ms linear; }
 [data-theme="paper"] .character-art { color: #f2f0ea; }
 .character-art.mood-sleepy { color: var(--fg-dim); }
