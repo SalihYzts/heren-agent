@@ -18,12 +18,12 @@ test-agent:
 	cd $(AGENT) && $(GO) vet ./... && $(GO) test -race ./...
 
 agent:
-	cd $(AGENT) && CGO_ENABLED=0 $(GO) build -ldflags="-s -w" -o dist/nero-agent-linux-amd64 ./cmd/nero-agent
-	cd $(AGENT) && CGO_ENABLED=0 GOARCH=arm64 $(GO) build -ldflags="-s -w" -o dist/nero-agent-linux-arm64 ./cmd/nero-agent
-	cd $(AGENT) && CGO_ENABLED=0 GOOS=windows $(GO) build -ldflags="-s -w" -o dist/nero-agent-windows-amd64.exe ./cmd/nero-agent
+	cd $(AGENT) && CGO_ENABLED=0 $(GO) build -ldflags="-s -w" -o dist/heren-agent-linux-amd64 ./cmd/heren-agent
+	cd $(AGENT) && CGO_ENABLED=0 GOARCH=arm64 $(GO) build -ldflags="-s -w" -o dist/heren-agent-linux-arm64 ./cmd/heren-agent
+	cd $(AGENT) && CGO_ENABLED=0 GOOS=windows $(GO) build -ldflags="-s -w" -o dist/heren-agent-windows-amd64.exe ./cmd/heren-agent
 
 dev-core:
-	cd apps/core && NERO_API_KEY=dev-key ../../$(PY) -m nero_core
+	cd apps/core && HEREN_API_KEY=dev-key ../../$(PY) -m heren_core
 
 vectors:
 	cd apps/core && ../../$(PY) scripts/gen_vectors.py > ../../packages/protocol/vectors/envelope_sign.json

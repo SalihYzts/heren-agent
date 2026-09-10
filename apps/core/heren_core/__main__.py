@@ -1,12 +1,12 @@
-"""nero-core entrypoint:  python -m nero_core  (reads NERO_CONFIG / NERO_* env)."""
+"""heren-core entrypoint:  python -m heren_core  (reads HEREN_CONFIG / HEREN_* env)."""
 from __future__ import annotations
 
 import logging
 
 import uvicorn
 
-from nero_core.app import create_app
-from nero_core.config import Settings
+from heren_core.app import create_app
+from heren_core.config import Settings
 
 
 def main() -> None:

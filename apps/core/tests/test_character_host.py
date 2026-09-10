@@ -3,9 +3,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from nero_core.bus import EventBus
-from nero_core.character import CharacterConfig
-from nero_core.character_host import CharacterHost
+from heren_core.bus import EventBus
+from heren_core.character import CharacterConfig
+from heren_core.character_host import CharacterHost
 
 
 class Clock:

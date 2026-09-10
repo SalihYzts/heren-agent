@@ -1,7 +1,7 @@
 [project]
-name = "nero-core"
+name = "heren-core"
 version = "0.1.0"
-description = "Nero core server: event bus, character engine, Hermes bridge, Action API, device gateway"
+description = "Heren Agent core server: event bus, character engine, Hermes bridge, Action API, device gateway"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -22,7 +22,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["nero_core*"]
+include = ["heren_core*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

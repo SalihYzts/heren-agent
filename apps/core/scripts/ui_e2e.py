@@ -2,13 +2,13 @@
 """Drive the real dashboard in headless Chromium over CDP and verify the HIGH-risk gate.
 
 Usage: python scripts/ui_e2e.py http://127.0.0.1:8701 e2e-key 9333
-Prints PASS/FAIL lines; screenshots in /tmp/nero-shots. Exit 1 on any failure.
+Prints PASS/FAIL lines; screenshots in /tmp/heren-shots. Exit 1 on any failure.
 Assumes: core running with the built UI, a Go agent paired as device "dev-local".
 """
 import asyncio, base64, json, os, subprocess, sys, time, urllib.request
 
 BASE, KEY, PORT = sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "9333"
-OUT = "/tmp/nero-shots"; os.makedirs(OUT, exist_ok=True)
+OUT = "/tmp/heren-shots"; os.makedirs(OUT, exist_ok=True)
 CHROME = os.path.expanduser("~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome")
 import websockets
 
@@ -80,9 +80,9 @@ async def main():
             check(code.isdigit() and len(code) == 6, f"pairing code is 6 digits ({code})")
             await shot("02-pairing")
             await click("Kapat")
-            agent_cfg = "/tmp/nero-e2e/agent.yaml"
-            open(agent_cfg, "w").write(f"core_url: {BASE.replace('http', 'ws')}/ws/agent\ndevice_id: dev-local\nname: DEV PC (Go)\nkey_file: /tmp/nero-e2e/go-agent.key\napproved_commands:\n  say-hi: ['echo', 'hi']\n")
-            agent = subprocess.Popen([os.path.join(os.path.dirname(__file__), "../../../agents/device-agent/dist/nero-agent-linux-amd64"),
+            agent_cfg = "/tmp/heren-e2e/agent.yaml"
+            open(agent_cfg, "w").write(f"core_url: {BASE.replace('http', 'ws')}/ws/agent\ndevice_id: dev-local\nname: DEV PC (Go)\nkey_file: /tmp/heren-e2e/go-agent.key\napproved_commands:\n  say-hi: ['echo', 'hi']\n")
+            agent = subprocess.Popen([os.path.join(os.path.dirname(__file__), "../../../agents/device-agent/dist/heren-agent-linux-amd64"),
                                       "--config", agent_cfg, "--pair", code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 check(await wait_for("[...document.querySelectorAll('.device')].some(d => d.textContent.includes('DEV PC (Go)') && d.querySelector('.status.online'))", 10),

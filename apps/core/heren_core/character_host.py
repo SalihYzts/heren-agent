@@ -20,11 +20,11 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from nero_core.bus import EventBus
-from nero_core.character import CharacterConfig, CharacterEngine
-from nero_core.protocol import Event
+from heren_core.bus import EventBus
+from heren_core.character import CharacterConfig, CharacterEngine
+from heren_core.protocol import Event
 
-log = logging.getLogger("nero.character")
+log = logging.getLogger("heren.character")
 
 
 class CharacterHost:

@@ -9,7 +9,7 @@ from typing import Any
 
 import aiosqlite
 
-from nero_core.protocol import ActionRequest, ActionStatus, Device, DeviceStatus
+from heren_core.protocol import ActionRequest, ActionStatus, Device, DeviceStatus
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices (

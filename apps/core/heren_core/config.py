@@ -1,6 +1,6 @@
 """Settings — every tunable lives here (no magic constants in modules).
 
-Load order: defaults < YAML file (NERO_CONFIG) < environment (NERO_*).
+Load order: defaults < YAML file (HEREN_CONFIG) < environment (HEREN_*).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class Settings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8700
     api_key: str = "change-me"
-    db_path: Path = Path("data/nero.db")
+    db_path: Path = Path("data/heren.db")
     core_seed_hex: str | None = None  # ed25519 seed; generated + persisted if None
     ui_dir: Path | None = None  # built UI (apps/ui/dist); served at / when set
     cors_origins: list[str] = Field(default_factory=list)  # dev UI origins, e.g. http://localhost:5173
@@ -38,11 +38,11 @@ class Settings(BaseModel):
     wake_time: str = "07:00"
     character: dict[str, Any] = Field(default_factory=dict)  # extra CharacterConfig overrides
     character_tick_s: float = 1.0
-    wake_word: str = "Nero"
+    wake_word: str = "Heren"
     language: str = "tr"
 
     def character_config(self) -> Any:
-        from nero_core.character import CharacterConfig
+        from heren_core.character import CharacterConfig
 
         return CharacterConfig(sleep_start=self.sleep_start, deep_sleep_start=self.deep_sleep_start,
                                wake_time=self.wake_time, **self.character)
@@ -58,11 +58,11 @@ class Settings(BaseModel):
     @classmethod
     def load(cls, path: str | os.PathLike[str] | None = None) -> Settings:
         data: dict[str, Any] = {}
-        cfg = Path(path or os.environ.get("NERO_CONFIG", "nero.yaml"))
+        cfg = Path(path or os.environ.get("HEREN_CONFIG", "heren.yaml"))
         if cfg.exists():
             data.update(yaml.safe_load(cfg.read_text()) or {})
         for name, field in cls.model_fields.items():
-            env = os.environ.get(f"NERO_{name.upper()}")
+            env = os.environ.get(f"HEREN_{name.upper()}")
             if env is not None:
                 ann = str(field.annotation)
                 data[name] = [s.strip() for s in env.split(",") if s.strip()] if "list" in ann else env

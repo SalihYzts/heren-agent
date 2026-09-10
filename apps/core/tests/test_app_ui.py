@@ -4,9 +4,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
-from nero_core.app import create_app
-from nero_core.config import Settings
-from nero_core.security import KeyPair
+from heren_core.app import create_app
+from heren_core.config import Settings
+from heren_core.security import KeyPair
 
 H = {"Authorization": "Bearer test-key"}
 
@@ -15,10 +15,10 @@ H = {"Authorization": "Bearer test-key"}
 def settings(tmp_path):
     ui = tmp_path / "ui"
     ui.mkdir()
-    (ui / "index.html").write_text("<!doctype html><title>nero</title>")
+    (ui / "index.html").write_text("<!doctype html><title>heren</title>")
     (ui / "assets").mkdir()
     (ui / "assets" / "a.js").write_text("1")
-    return Settings(db_path=tmp_path / "nero.db", api_key="test-key",
+    return Settings(db_path=tmp_path / "heren.db", api_key="test-key",
                     core_seed_hex=KeyPair.generate().seed_hex, ui_dir=ui,
                     cors_origins=["http://localhost:5173"])
 
@@ -41,9 +41,9 @@ async def test_ui_is_served_at_root_with_spa_fallback(settings):
     app = create_app(settings)
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
-            assert "<title>nero</title>" in (await c.get("/")).text
+            assert "<title>heren</title>" in (await c.get("/")).text
             assert (await c.get("/assets/a.js")).text == "1"
-            assert "<title>nero</title>" in (await c.get("/devices/dev-1")).text  # SPA route
+            assert "<title>heren</title>" in (await c.get("/devices/dev-1")).text  # SPA route
             assert (await c.get("/api/nope", headers=H)).status_code == 404  # api never falls back
 
 

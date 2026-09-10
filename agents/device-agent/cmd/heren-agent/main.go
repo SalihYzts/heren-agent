@@ -1,14 +1,14 @@
-// nero-agent: device agent binary for Linux and Windows.
+// heren-agent: device agent binary for Linux and Windows.
 //
-//	nero-agent --core ws://core:8700/ws/agent --pair 123456
-//	nero-agent --config /etc/nero/agent.yaml
+//	heren-agent --core ws://core:8700/ws/agent --pair 123456
+//	heren-agent --config /etc/heren/agent.yaml
 //
 // Config file (YAML, all keys optional; flags override):
 //
 //	core_url: ws://127.0.0.1:8700/ws/agent
 //	device_id: main-pc
 //	name: MAIN PC
-//	key_file: /var/lib/nero/agent.key
+//	key_file: /var/lib/heren/agent.key
 //	approved_commands:
 //	  start-backend: ["systemctl", "--user", "start", "backend"]
 package main
@@ -28,9 +28,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"nero/agent/internal/adapter"
-	"nero/agent/internal/client"
-	"nero/agent/internal/protocol"
+	"heren/agent/internal/adapter"
+	"heren/agent/internal/client"
+	"heren/agent/internal/protocol"
 )
 
 type fileConfig struct {
@@ -44,13 +44,13 @@ type fileConfig struct {
 
 func defaultKeyFile() string {
 	if runtime.GOOS == "windows" {
-		return filepath.Join(os.Getenv("ProgramData"), "nero", "agent.key")
+		return filepath.Join(os.Getenv("ProgramData"), "heren", "agent.key")
 	}
 	if os.Geteuid() == 0 {
-		return "/var/lib/nero/agent.key"
+		return "/var/lib/heren/agent.key"
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".nero", "agent.key")
+	return filepath.Join(home, ".heren", "agent.key")
 }
 
 func loadOrCreateKey(path string) (*protocol.KeyPair, error) {
@@ -99,7 +99,7 @@ func main() {
 	)
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("nero-agent ")
+	log.SetPrefix("heren-agent ")
 
 	var fc fileConfig
 	if *cfgPath != "" {

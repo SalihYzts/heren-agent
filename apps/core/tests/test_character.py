@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from nero_core.character import (
+from heren_core.character import (
     Activity,
     Attention,
     CharacterConfig,

@@ -3,7 +3,7 @@
 Mirrors what the Go agent will do: pair, sign envelopes, heartbeat, answer actions.
 Useful for development without a real agent and as the protocol conformance reference.
 
-    python -m nero_core.fake_agent --core ws://127.0.0.1:8700/ws/agent --pair 123456
+    python -m heren_core.fake_agent --core ws://127.0.0.1:8700/ws/agent --pair 123456
 """
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ from pathlib import Path
 
 import websockets
 
-from nero_core.protocol import Envelope
-from nero_core.security import KeyPair, sign, verify
+from heren_core.protocol import Envelope
+from heren_core.security import KeyPair, sign, verify
 
-log = logging.getLogger("nero.fake_agent")
+log = logging.getLogger("heren.fake_agent")
 
 
 class FakeAgent:
@@ -125,7 +125,7 @@ def main() -> None:
     ap.add_argument("--id", default=f"fake-{platform.node()}")
     ap.add_argument("--name", default=platform.node())
     ap.add_argument("--pair", default=None, help="one-time pairing code from the dashboard")
-    ap.add_argument("--key-file", default=Path.home() / ".nero" / "agent.key")
+    ap.add_argument("--key-file", default=Path.home() / ".heren" / "agent.key")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     asyncio.run(FakeAgent(args.core, args.id, args.name, Path(args.key_file), args.pair).run_forever())

@@ -1,4 +1,4 @@
-"""Protocol models — the wire and storage contract for Nero.
+"""Protocol models — the wire and storage contract for Heren Agent.
 
 Everything that crosses a process boundary (UI ↔ core, core ↔ agent, Hermes MCP ↔ core)
 is defined here. Keep this module free of I/O and framework imports.

@@ -26,16 +26,16 @@ from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSock
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
-from nero_core.actions import ActionService, ApprovalNotFound
-from nero_core.bus import EventBus
-from nero_core.character_host import CharacterHost
-from nero_core.config import Settings
-from nero_core.gateway import DeviceGateway
-from nero_core.protocol import ActionRequest, ActionStatus, Event
-from nero_core.security import KeyPair
-from nero_core.storage import Storage
+from heren_core.actions import ActionService, ApprovalNotFound
+from heren_core.bus import EventBus
+from heren_core.character_host import CharacterHost
+from heren_core.config import Settings
+from heren_core.gateway import DeviceGateway
+from heren_core.protocol import ActionRequest, ActionStatus, Event
+from heren_core.security import KeyPair
+from heren_core.storage import Storage
 
-log = logging.getLogger("nero.app")
+log = logging.getLogger("heren.app")
 
 
 class Core:
@@ -140,7 +140,7 @@ def create_app(settings: Settings) -> FastAPI:
         finally:
             await core.stop()
 
-    app = FastAPI(title="nero-core", lifespan=lifespan)
+    app = FastAPI(title="heren-core", lifespan=lifespan)
     app.state.core = core
     if settings.cors_origins:
         from fastapi.middleware.cors import CORSMiddleware

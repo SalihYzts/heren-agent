@@ -22,8 +22,8 @@ func TestPythonCoreVerifiesGoSignature(t *testing.T) {
 	script := `
 import sys, json
 sys.path.insert(0, "../../../../apps/core")
-from nero_core.protocol import Envelope
-from nero_core.security import verify
+from heren_core.protocol import Envelope
+from heren_core.security import verify
 env = Envelope.model_validate_json(sys.stdin.read())
 verify(env, sys.argv[1])
 print("OK")`

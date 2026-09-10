@@ -11,9 +11,9 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from nero_core.protocol import Event
+from heren_core.protocol import Event
 
-log = logging.getLogger("nero.bus")
+log = logging.getLogger("heren.bus")
 
 Handler = Callable[[Event], Any]
 

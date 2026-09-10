@@ -1,4 +1,4 @@
-module nero/agent
+module heren/agent
 
 go 1.27.1
 

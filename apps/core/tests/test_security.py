@@ -3,8 +3,8 @@ import time
 
 import pytest
 
-from nero_core.protocol import Envelope
-from nero_core.security import KeyPair, ReplayError, ReplayGuard, SignatureError, sign, verify
+from heren_core.protocol import Envelope
+from heren_core.security import KeyPair, ReplayError, ReplayGuard, SignatureError, sign, verify
 
 
 def _env(device_id="dev-1", **kw):

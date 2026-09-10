@@ -6,11 +6,11 @@ import asyncio
 
 import pytest
 
-from nero_core.bus import EventBus
-from nero_core.gateway import DeviceGateway, PairingError
-from nero_core.protocol import ActionRequest, ActionStatus, DeviceStatus, Envelope
-from nero_core.security import KeyPair, sign, verify
-from nero_core.storage import Storage
+from heren_core.bus import EventBus
+from heren_core.gateway import DeviceGateway, PairingError
+from heren_core.protocol import ActionRequest, ActionStatus, DeviceStatus, Envelope
+from heren_core.security import KeyPair, sign, verify
+from heren_core.storage import Storage
 
 
 class FakeConn:

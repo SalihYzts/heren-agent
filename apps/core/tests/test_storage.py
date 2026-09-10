@@ -1,13 +1,13 @@
 """SQLite storage: devices, action requests, audit log, settings."""
 import pytest
 
-from nero_core.protocol import ActionRequest, ActionStatus, Device, DeviceStatus
-from nero_core.storage import Storage
+from heren_core.protocol import ActionRequest, ActionStatus, Device, DeviceStatus
+from heren_core.storage import Storage
 
 
 @pytest.fixture
 async def store(tmp_path):
-    s = Storage(tmp_path / "nero.db")
+    s = Storage(tmp_path / "heren.db")
     await s.open()
     yield s
     await s.close()
@@ -78,6 +78,6 @@ async def test_audit_redacts_secret_looking_params(store):
 
 
 async def test_settings_get_set_with_default(store):
-    assert await store.get_setting("wake_word", "Nero") == "Nero"
+    assert await store.get_setting("wake_word", "Heren") == "Heren"
     await store.set_setting("wake_word", "Hermes")
-    assert await store.get_setting("wake_word", "Nero") == "Hermes"
+    assert await store.get_setting("wake_word", "Heren") == "Hermes"

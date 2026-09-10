@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from nacl.exceptions import BadSignatureError
 from nacl.signing import SigningKey, VerifyKey
 
-from nero_core.protocol import Envelope
+from heren_core.protocol import Envelope
 
 
 class SignatureError(Exception):

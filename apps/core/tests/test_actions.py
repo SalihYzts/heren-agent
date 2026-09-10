@@ -7,10 +7,10 @@ import asyncio
 
 import pytest
 
-from nero_core.actions import ActionService, ApprovalNotFound
-from nero_core.bus import EventBus
-from nero_core.protocol import ActionRequest, ActionResult, ActionStatus, Device, DeviceStatus
-from nero_core.storage import Storage
+from heren_core.actions import ActionService, ApprovalNotFound
+from heren_core.bus import EventBus
+from heren_core.protocol import ActionRequest, ActionResult, ActionStatus, Device, DeviceStatus
+from heren_core.storage import Storage
 
 
 class FakeDispatcher:

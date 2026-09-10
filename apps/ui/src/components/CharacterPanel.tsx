@@ -10,7 +10,7 @@ interface Props {
 export function CharacterPanel({ state, onTouch }: Props) {
   return (
     <div className="panel character" data-testid="character-panel">
-      <div className="panel-h">Nero<span className="count">{state.activity} · {state.mood}</span></div>
+      <div className="panel-h">Heren<span className="count">{state.activity} · {state.mood}</span></div>
       <div className="character-b" onClick={onTouch} title="dokun → dinle / uyandır">
         <AsciiCharacterRenderer pack={defaultPack} activity={state.activity} mood={state.mood} className="character-art" />
         <div className="character-meta mono">

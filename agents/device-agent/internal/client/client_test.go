@@ -12,11 +12,11 @@ import (
 
 	"github.com/coder/websocket"
 
-	"nero/agent/internal/adapter"
-	"nero/agent/internal/protocol"
+	"heren/agent/internal/adapter"
+	"heren/agent/internal/protocol"
 )
 
-// fakeCore is a minimal stand-in for nero-core's /ws/agent: it checks hello,
+// fakeCore is a minimal stand-in for heren-core's /ws/agent: it checks hello,
 // sends welcome, verifies signatures and can push action.request frames.
 type fakeCore struct {
 	t          *testing.T

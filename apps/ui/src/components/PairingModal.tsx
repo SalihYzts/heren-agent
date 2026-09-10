@@ -31,7 +31,7 @@ export function PairingModal({ fetchCode, onClose }: Props) {
               <div className="code" data-testid="pairing-code">{ttl > 0 ? code : '——————'}</div>
               <div className="dim mono" style={{ fontSize: 11 }}>
                 Hedef makinede:<br />
-                <span style={{ color: 'var(--fg)' }}>nero-agent --core ws://&lt;bu-sunucu&gt;:8700/ws/agent --pair {ttl > 0 ? code : '…'}</span><br /><br />
+                <span style={{ color: 'var(--fg)' }}>heren-agent --core ws://&lt;bu-sunucu&gt;:8700/ws/agent --pair {ttl > 0 ? code : '…'}</span><br /><br />
                 Kod tek kullanımlık; agent bağlanınca cihaz listede belirir.
               </div>
             </>

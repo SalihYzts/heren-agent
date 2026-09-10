@@ -1,4 +1,4 @@
-// Package protocol implements the Nero wire envelope and ed25519 signing.
+// Package protocol implements the Heren wire envelope and ed25519 signing.
 //
 // CanonicalBytes must produce byte-identical output to Python's
 // json.dumps(data, sort_keys=True, separators=(",", ":")) (ensure_ascii=True):

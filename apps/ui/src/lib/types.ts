@@ -1,4 +1,4 @@
-// Wire types — mirror apps/core/nero_core/protocol.py. Keep in sync by hand until codegen.
+// Wire types — mirror apps/core/heren_core/protocol.py. Keep in sync by hand until codegen.
 
 export type DeviceStatus = 'online' | 'offline'
 export type Risk = 'low' | 'medium' | 'high' | 'critical'

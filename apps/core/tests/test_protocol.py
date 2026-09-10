@@ -2,7 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
-from nero_core.protocol import (
+from heren_core.protocol import (
     ActionRequest,
     ActionResult,
     ActionStatus,

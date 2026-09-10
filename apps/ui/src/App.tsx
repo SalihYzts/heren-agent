@@ -9,7 +9,7 @@ import { Login } from './components/Login'
 import { Activity, Audit } from './components/Logs'
 import { PairingModal } from './components/PairingModal'
 
-const KEY_STORAGE = 'nero.api_key'
+const KEY_STORAGE = 'heren.api_key'
 const APPROVER = 'ui:dashboard'
 
 export default function App() {
@@ -83,7 +83,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
   return (
     <div className="shell">
       <div className="topbar">
-        <span className="brand">NERO</span>
+        <span className="brand">HEREN AGENT</span>
         <span className="dim mono" style={{ fontSize: 11 }}>{online}/{devices.length} online</span>
         <span className="spacer" />
         <button className="btn" onClick={() => setPairing(true)}>+ Cihaz eşle</button>
@@ -114,7 +114,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
       <div className="statusbar">
         <span style={{ color: state.connected ? 'var(--ok)' : 'var(--accent)' }}>● {state.connected ? 'core bağlı' : 'core bağlantısı yok'}</span>
         <span>onay bekleyen: {state.approvals.length}</span>
-        <span>nero: {state.character.activity}/{state.character.mood}</span>
+        <span>heren: {state.character.activity}/{state.character.mood}</span>
       </div>
       {pairing && <PairingModal fetchCode={fetchCode} onClose={() => setPairing(false)} />}
       {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.text}</div>}

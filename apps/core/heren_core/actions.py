@@ -15,11 +15,11 @@ import time
 from collections.abc import Callable
 from typing import Protocol
 
-from nero_core.bus import EventBus
-from nero_core.protocol import ActionRequest, ActionResult, ActionStatus, RiskLevel
-from nero_core.storage import Storage
+from heren_core.bus import EventBus
+from heren_core.protocol import ActionRequest, ActionResult, ActionStatus, RiskLevel
+from heren_core.storage import Storage
 
-log = logging.getLogger("nero.actions")
+log = logging.getLogger("heren.actions")
 
 NEEDS_APPROVAL = frozenset({RiskLevel.HIGH, RiskLevel.CRITICAL})
 

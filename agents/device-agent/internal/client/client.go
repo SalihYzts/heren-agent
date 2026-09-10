@@ -1,4 +1,4 @@
-// Package client is the agent's connection to nero-core: outbound WebSocket,
+// Package client is the agent's connection to heren-core: outbound WebSocket,
 // hello/pairing, core-key pinning, signed envelopes, replay guard, heartbeat,
 // reconnect with backoff, and action execution through an Adapter.
 package client
@@ -14,8 +14,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"nero/agent/internal/adapter"
-	"nero/agent/internal/protocol"
+	"heren/agent/internal/adapter"
+	"heren/agent/internal/protocol"
 )
 
 type Config struct {

@@ -3,8 +3,8 @@ import asyncio
 
 import pytest
 
-from nero_core.bus import EventBus
-from nero_core.protocol import Event
+from heren_core.bus import EventBus
+from heren_core.protocol import Event
 
 
 async def test_subscriber_receives_matching_event():

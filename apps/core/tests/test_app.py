@@ -6,15 +6,15 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
-from nero_core.app import create_app
-from nero_core.config import Settings
-from nero_core.protocol import Envelope
-from nero_core.security import KeyPair, sign, verify
+from heren_core.app import create_app
+from heren_core.config import Settings
+from heren_core.protocol import Envelope
+from heren_core.security import KeyPair, sign, verify
 
 
 @pytest.fixture
 def settings(tmp_path):
-    return Settings(db_path=tmp_path / "nero.db", api_key="test-key", core_seed_hex=KeyPair.generate().seed_hex,
+    return Settings(db_path=tmp_path / "heren.db", api_key="test-key", core_seed_hex=KeyPair.generate().seed_hex,
                     approval_ttl_s=60, heartbeat_timeout_s=30, action_timeout_s=2)
 
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Nero device agent
+Description=Heren Agent device agent
 After=network-online.target
 Wants=network-online.target
 
@@ -7,14 +7,14 @@ Wants=network-online.target
 Type=simple
 # Runs as root: shutdown/reboot/efibootmgr/systemctl restart <svc> need it.
 # The agent executes no free-text commands — only the fixed action set and
-# the approved_commands allowlist from /etc/nero/agent.yaml.
-ExecStart=/usr/local/bin/nero-agent --config /etc/nero/agent.yaml
+# the approved_commands allowlist from /etc/heren/agent.yaml.
+ExecStart=/usr/local/bin/heren-agent --config /etc/heren/agent.yaml
 Restart=always
 RestartSec=3
 NoNewPrivileges=false
 ProtectHome=read-only
 ProtectSystem=full
-ReadWritePaths=/var/lib/nero
+ReadWritePaths=/var/lib/heren
 
 [Install]
 WantedBy=multi-user.target

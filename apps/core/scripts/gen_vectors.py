@@ -2,8 +2,8 @@
 import json
 import sys
 
-from nero_core.protocol import Envelope
-from nero_core.security import KeyPair, sign
+from heren_core.protocol import Envelope
+from heren_core.security import KeyPair, sign
 
 kp = KeyPair.from_seed_hex("00" * 31 + "01")
 cases = []

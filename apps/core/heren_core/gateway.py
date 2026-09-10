@@ -23,12 +23,12 @@ from typing import Any, Protocol
 
 from pydantic import ValidationError
 
-from nero_core.bus import EventBus
-from nero_core.protocol import ActionRequest, ActionResult, ActionStatus, Device, DeviceStatus, Envelope
-from nero_core.security import KeyPair, ReplayError, ReplayGuard, SignatureError, sign, verify
-from nero_core.storage import Storage
+from heren_core.bus import EventBus
+from heren_core.protocol import ActionRequest, ActionResult, ActionStatus, Device, DeviceStatus, Envelope
+from heren_core.security import KeyPair, ReplayError, ReplayGuard, SignatureError, sign, verify
+from heren_core.storage import Storage
 
-log = logging.getLogger("nero.gateway")
+log = logging.getLogger("heren.gateway")
 
 
 class Conn(Protocol):
