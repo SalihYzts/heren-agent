@@ -4,6 +4,7 @@ import { initialState, reduce } from './lib/store'
 import type { AuditRow, BootEntry } from './lib/types'
 import { Approvals } from './components/Approvals'
 import { CharacterPanel } from './components/CharacterPanel'
+import { Conversation } from './components/Conversation'
 import { DeviceCard } from './components/DeviceCard'
 import { Login } from './components/Login'
 import { Activity, Audit } from './components/Logs'
@@ -79,6 +80,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
   const online = devices.filter(d => d.status === 'online').length
   const fetchCode = useCallback(() => api.pairingCode(), [api])
   const onTouch = useCallback(() => { api.touch().catch(e => say(`dokunma: ${(e as Error).message}`, true)) }, [api, say])
+  const onAsk = useCallback((text: string) => { api.ask(text).catch(e => say(`soru: ${(e as Error).message}`, true)) }, [api, say])
 
   return (
     <div className="shell">
@@ -98,6 +100,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
                 bootEntries={boot[d.device_id]} onAction={onAction} />
             ))}
           </div>
+          <Conversation rows={state.conversation} hermes={state.hermes} onAsk={onAsk} />
         </div>
         <div>
           <CharacterPanel state={state.character} onTouch={onTouch} />

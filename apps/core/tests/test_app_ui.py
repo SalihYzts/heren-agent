@@ -45,6 +45,10 @@ async def test_ui_is_served_at_root_with_spa_fallback(settings):
             assert (await c.get("/assets/a.js")).text == "1"
             assert "<title>heren</title>" in (await c.get("/devices/dev-1")).text  # SPA route
             assert (await c.get("/api/nope", headers=H)).status_code == 404  # api never falls back
+            # /mcp must reach the MCP mount even when the SPA catch-all exists
+            r = await c.post("/mcp", headers={"Authorization": "Bearer wrong", "Content-Type": "application/json",
+                                              "Accept": "application/json, text/event-stream"}, json={})
+            assert r.status_code == 401, r.text
 
 
 async def test_action_history_endpoint(settings):
@@ -81,3 +85,32 @@ def test_state_endpoint_and_touch(settings):
             while ev["type"] != "character.state":
                 ev = ui.receive_json()
             assert ev["payload"]["activity"] == "listening" and ev["payload"]["attention"] == "user"
+
+
+def test_ask_endpoint_reports_hermes_unavailable_cleanly(settings):
+    # nothing listens on hermes_endpoint → must not 500, must say so, character returns to idle
+    settings = settings.model_copy(update={"hermes_endpoint": "http://127.0.0.1:9", "hermes_api_key": "k"})
+    app = create_app(settings)
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/events?token=test-key") as ui:
+            ui.receive_json()
+            r = client.post("/api/ask", headers=H, json={"text": "selam"})
+            assert r.status_code == 200
+            body = r.json()
+            assert body["ok"] is False and "unreachable" in body["error"]
+            seen = []
+            for _ in range(20):
+                ev = ui.receive_json()
+                seen.append(ev["type"])
+                if ev["type"] == "hermes.done":
+                    break
+            assert "hermes.thinking" in seen and "hermes.unavailable" in seen
+        assert client.get("/api/state", headers=H).json()["character"]["activity"] == "idle"
+
+
+def test_health_reports_hermes_reachability(settings):
+    settings = settings.model_copy(update={"hermes_endpoint": "http://127.0.0.1:9"})
+    app = create_app(settings)
+    with TestClient(app) as client:
+        r = client.get("/api/state", headers=H)
+        assert r.json()["hermes"]["reachable"] is False

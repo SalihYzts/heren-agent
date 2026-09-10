@@ -120,6 +120,17 @@ a { color: inherit; }
 .character-art[data-fallback="true"] { color: var(--warn); }
 .character-meta { font-size: 11px; display: grid; gap: 6px; }
 
+/* ---- conversation */
+.col { display: flex; flex-direction: column; }
+.conversation { display: flex; flex-direction: column; flex: 1; min-height: 240px; margin-top: 8px; }
+.conv-rows { flex: 1; overflow: auto; padding: 6px 0; }
+.conv-row { display: grid; grid-template-columns: 44px 48px 1fr; gap: 8px; padding: 4px 10px; font-size: 12px; }
+.conv-row .who { color: var(--fg-dim); text-transform: uppercase; font-size: 10px; letter-spacing: .06em; }
+.conv-row.heren .who { color: var(--ok); }
+.conv-row.error .who, .conv-row.error .text { color: var(--accent); }
+.conv-row .text { white-space: pre-wrap; }
+.conv-input { display: flex; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--line); }
+
 /* ---- approvals */
 .approval { padding: 10px; border-bottom: 1px solid var(--line); background: #150c0c; }
 .approval .who { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }

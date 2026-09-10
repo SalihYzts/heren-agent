@@ -59,14 +59,19 @@ async def test_action_on_unknown_device_is_404(app):
 def _pair_agent(client: TestClient, code: str, device_id="dev-1"):
     """Open the agent WS, send hello, return (ws, keypair). Sync TestClient for WS."""
     kp = KeyPair.generate()
-    ws = client.websocket_connect("/ws/agent")
-    ws.__enter__()
+    cm = client.websocket_connect("/ws/agent")
+    ws = cm.__enter__()
+    ws._cm = cm  # closed via _close(ws)
     ws.send_json({"type": "hello", "device_id": device_id, "name": "PC", "platform": "linux",
                   "public_key": kp.public_key_hex, "capabilities": ["get_status", "shutdown"],
                   "pairing_code": code})
     welcome = ws.receive_json()
     assert welcome["type"] == "welcome"
     return ws, kp, welcome["core_public_key"]
+
+
+def _close(ws):
+    ws._cm.__exit__(None, None, None)
 
 
 def test_paired_device_is_listed_online(app):
@@ -76,7 +81,7 @@ def test_paired_device_is_listed_online(app):
         devs = client.get("/api/devices", headers=H).json()
         assert devs[0]["device_id"] == "dev-1" and devs[0]["status"] == "online"
         assert "public_key" in devs[0]
-        ws.close()
+        _close(ws)
 
 
 def test_action_roundtrip_with_agent_answering(app):
@@ -108,7 +113,7 @@ def test_action_roundtrip_with_agent_answering(app):
 
         audit = client.get("/api/audit", headers=H).json()
         assert audit[0]["action"] == "get_status" and audit[0]["result"] == "completed"
-        ws.close()
+        _close(ws)
 
 
 def test_high_risk_flow_requires_approval_via_api(app):
@@ -154,7 +159,7 @@ def test_high_risk_flow_requires_approval_via_api(app):
 
             audit = client.get("/api/audit", headers=H).json()
             assert audit[0]["approved_by"] == "ui:salih" and audit[0]["risk"] == "high"
-        ws.close()
+        _close(ws)
 
 
 def test_deny_endpoint(app):
@@ -167,7 +172,7 @@ def test_deny_endpoint(app):
         assert r.status_code == 200 and r.json()["status"] == "denied"
         assert client.post(f"/api/approvals/{rid}/approve", headers=H,
                            json={"approved_by": "ui:salih"}).status_code == 404
-        ws.close()
+        _close(ws)
 
 
 def test_events_ws_requires_token(app):

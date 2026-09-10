@@ -1,0 +1,15 @@
+# Hermes side of the Heren integration — append to the Hermes profile's config.yaml.
+# The MCP server IS heren-core; Hermes controls devices only through these tools.
+mcp_servers:
+  heren:
+    url: http://127.0.0.1:8700/mcp
+    headers:
+      Authorization: "Bearer ${MCP_HEREN_TOKEN}"
+
+# .env of the same Hermes profile:
+#   API_SERVER_ENABLED=true
+#   API_SERVER_KEY=<same as HEREN_HERMES_API_KEY on the core>
+#   API_SERVER_PORT=8642
+#   MCP_HEREN_TOKEN=<same as HEREN_MCP_KEY on the core>
+#
+# Then: hermes gateway   (or the systemd unit)

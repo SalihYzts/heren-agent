@@ -25,12 +25,15 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
+from starlette.types import Receive, Scope, Send
 
 from heren_core.actions import ActionService, ApprovalNotFound
 from heren_core.bus import EventBus
 from heren_core.character_host import CharacterHost
 from heren_core.config import Settings
 from heren_core.gateway import DeviceGateway
+from heren_core.hermes_bridge import HermesBridge
+from heren_core.mcp_server import BearerGate, build_mcp_server
 from heren_core.protocol import ActionRequest, ActionStatus, Event
 from heren_core.security import KeyPair
 from heren_core.storage import Storage
@@ -49,6 +52,8 @@ class Core:
         self.gateway: DeviceGateway | None = None
         self.actions: ActionService | None = None
         self.character: CharacterHost | None = None
+        self.hermes: HermesBridge | None = None
+        self.mcp_app: Any = None
         self._tasks: list[asyncio.Task[Any]] = []
 
     async def start(self) -> None:
@@ -69,6 +74,9 @@ class Core:
                                        tick_interval_s=s.character_tick_s)
         self.character.attach()
         self.character.start()
+        self.hermes = HermesBridge(bus=self.bus, endpoint=s.hermes_endpoint, api_key=s.hermes_api_key,
+                                   session_id=s.hermes_session_id, language=s.hermes_language,
+                                   request_timeout_s=s.hermes_request_timeout_s)
         self._tasks.append(asyncio.create_task(self._housekeeping()))
 
     async def stop(self) -> None:
@@ -94,6 +102,10 @@ class Core:
 
 
 # ------------------------------------------------------------------ request models
+
+
+class AskIn(BaseModel):
+    text: str
 
 
 class ActionIn(BaseModel):
@@ -132,16 +144,56 @@ class _WsConn:
 def create_app(settings: Settings) -> FastAPI:
     core = Core(settings)
 
+    # MCP server is built once; its tool handlers reach core.store/core.actions lazily
+    # through the proxies below, because Core starts inside the lifespan.
+    class _StoreProxy:
+        def __getattr__(self, n: str) -> Any: return getattr(core.store, n)
+
+    class _ActionsProxy:
+        def __getattr__(self, n: str) -> Any:
+            assert core.actions, "core not started"
+            return getattr(core.actions, n)
+
+    mcp = build_mcp_server(store=_StoreProxy(), actions=_ActionsProxy())  # type: ignore[arg-type]
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    # Auth is our Bearer gate; DNS-rebinding host pinning is optional (mcp_allowed_hosts).
+    sec = (TransportSecuritySettings(enable_dns_rebinding_protection=True,
+                                     allowed_hosts=settings.mcp_allowed_hosts)
+           if settings.mcp_allowed_hosts else
+           TransportSecuritySettings(enable_dns_rebinding_protection=False))
+    mcp_asgi = mcp.streamable_http_app(streamable_http_path="/", stateless_http=True,
+                                       transport_security=sec)
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await core.start()
         try:
-            yield
+            async with mcp.session_manager.run():
+                yield
         finally:
             await core.stop()
 
     app = FastAPI(title="heren-core", lifespan=lifespan)
     app.state.core = core
+
+    # /mcp is served by a path-scoped ASGI shim rather than app.mount(): Starlette's
+    # Mount only matches "/mcp/…", while MCP clients POST to exactly "/mcp", which
+    # would otherwise fall into the SPA catch-all route.
+    mcp_gate = BearerGate(mcp_asgi, settings.mcp_key)
+
+    class _McpShim:
+        def __init__(self, inner: Any) -> None:
+            self.inner = inner
+
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            if scope["type"] == "http" and scope["path"].rstrip("/") == "/mcp":
+                scope = dict(scope, path="/", root_path=scope.get("root_path", "") + "/mcp")
+                await mcp_gate(scope, receive, send)
+                return
+            await self.inner(scope, receive, send)
+
+    app.add_middleware(_McpShim)
     if settings.cors_origins:
         from fastapi.middleware.cors import CORSMiddleware
 
@@ -221,16 +273,24 @@ def create_app(settings: Settings) -> FastAPI:
         return await core.store.list_audit(limit=limit)
 
     async def _snapshot() -> dict[str, Any]:
-        assert core.character
+        assert core.character and core.hermes
         return {
             "devices": [d.model_dump() for d in await core.store.list_devices()],
             "approvals": [r.model_dump() | {"risk": r.risk} for r in await svc().list_pending_approvals()],
             "character": core.character.snapshot(),
+            "hermes": {"endpoint": settings.hermes_endpoint, "reachable": await core.hermes.healthy()},
         }
 
     @app.get("/api/state", dependencies=[Depends(auth)])
     async def state() -> dict[str, Any]:
         return await _snapshot()
+
+    @app.post("/api/ask", dependencies=[Depends(auth)])
+    async def ask(body: AskIn) -> dict[str, Any]:
+        assert core.hermes and core.character
+        char = core.character.snapshot() | {"time": __import__("time").strftime("%H:%M")}
+        res = await core.hermes.ask(body.text, character=char)
+        return {"ok": res.ok, "text": res.text, "error": res.error, "run_id": res.run_id}
 
     @app.post("/api/character/touch", dependencies=[Depends(auth)])
     async def character_touch() -> dict[str, Any]:
@@ -304,7 +364,7 @@ def create_app(settings: Settings) -> FastAPI:
 
         @app.get("/{path:path}", include_in_schema=False)
         async def spa(path: str) -> FileResponse:
-            if path.startswith(("api/", "ws/")):
+            if path.startswith(("api/", "ws/", "mcp")):
                 raise HTTPException(404)
             candidate = (ui_dir / path).resolve()
             if path and candidate.is_file() and ui_dir.resolve() in candidate.parents:

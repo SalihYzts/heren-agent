@@ -35,6 +35,7 @@ export class Api {
     this.req<ActionResult>('POST', `/api/approvals/${id}/deny`, { denied_by })
   audit = (limit = 100) => this.req<AuditRow[]>('GET', `/api/audit?limit=${limit}`)
   touch = () => this.req<CharacterState>('POST', '/api/character/touch')
+  ask = (text: string) => this.req<{ ok: boolean; text: string; error: string | null }>('POST', '/api/ask', { text })
 }
 
 /** Opens /ws/events and keeps it open; delivers every event (plus a synthetic
