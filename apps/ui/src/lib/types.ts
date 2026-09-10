@@ -76,6 +76,14 @@ export interface BootEntry {
   active?: boolean
 }
 
+export interface CharacterState {
+  schema: number
+  activity: 'idle' | 'listening' | 'thinking' | 'speaking' | 'working' | 'sleeping' | 'waking'
+  mood: 'neutral' | 'happy' | 'sleepy' | 'annoyed' | 'confused'
+  attention: 'none' | 'user' | 'notification' | 'device'
+  energy: number
+}
+
 export interface Event {
   type: string
   payload: Record<string, unknown>

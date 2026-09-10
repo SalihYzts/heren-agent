@@ -32,11 +32,20 @@ class Settings(BaseModel):
     action_timeout_s: float = 30.0
     pairing_code_ttl_s: float = 300.0
 
-    # character
+    # character (time rules; the rest of CharacterConfig via `character:` mapping)
     sleep_start: str = "23:00"
     deep_sleep_start: str = "00:00"
+    wake_time: str = "07:00"
+    character: dict[str, Any] = Field(default_factory=dict)  # extra CharacterConfig overrides
+    character_tick_s: float = 1.0
     wake_word: str = "Nero"
     language: str = "tr"
+
+    def character_config(self) -> Any:
+        from nero_core.character import CharacterConfig
+
+        return CharacterConfig(sleep_start=self.sleep_start, deep_sleep_start=self.deep_sleep_start,
+                               wake_time=self.wake_time, **self.character)
 
     # hermes bridge
     hermes_endpoint: str = "http://127.0.0.1:8642"

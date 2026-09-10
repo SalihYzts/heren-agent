@@ -3,6 +3,7 @@ import { Api, ApiError, connectEvents } from './lib/api'
 import { initialState, reduce } from './lib/store'
 import type { AuditRow, BootEntry } from './lib/types'
 import { Approvals } from './components/Approvals'
+import { CharacterPanel } from './components/CharacterPanel'
 import { DeviceCard } from './components/DeviceCard'
 import { Login } from './components/Login'
 import { Activity, Audit } from './components/Logs'
@@ -77,6 +78,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
   const names = Object.fromEntries(devices.map(d => [d.device_id, d.name]))
   const online = devices.filter(d => d.status === 'online').length
   const fetchCode = useCallback(() => api.pairingCode(), [api])
+  const onTouch = useCallback(() => { api.touch().catch(e => say(`dokunma: ${(e as Error).message}`, true)) }, [api, say])
 
   return (
     <div className="shell">
@@ -98,6 +100,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
           </div>
         </div>
         <div>
+          <CharacterPanel state={state.character} onTouch={onTouch} />
           <Approvals approvals={state.approvals} devices={state.devices} onApprove={onApprove} onDeny={onDeny} />
           <div className="panel">
             <div className="panel-h">
@@ -111,6 +114,7 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
       <div className="statusbar">
         <span style={{ color: state.connected ? 'var(--ok)' : 'var(--accent)' }}>● {state.connected ? 'core bağlı' : 'core bağlantısı yok'}</span>
         <span>onay bekleyen: {state.approvals.length}</span>
+        <span>nero: {state.character.activity}/{state.character.mood}</span>
       </div>
       {pairing && <PairingModal fetchCode={fetchCode} onClose={() => setPairing(false)} />}
       {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.text}</div>}

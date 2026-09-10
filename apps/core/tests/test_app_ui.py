@@ -63,3 +63,21 @@ def test_events_ws_sends_snapshot_first(settings):
             assert first["type"] == "ui.snapshot"
             assert first["payload"]["devices"] == []
             assert first["payload"]["approvals"] == []
+            assert first["payload"]["character"]["activity"] == "idle"
+
+
+def test_state_endpoint_and_touch(settings):
+    app = create_app(settings)
+    with TestClient(app) as client:
+        r = client.get("/api/state", headers=H)
+        assert r.status_code == 200
+        assert r.json()["character"]["activity"] == "idle"
+        assert r.json()["devices"] == []
+        with client.websocket_connect("/ws/events?token=test-key") as ui:
+            ui.receive_json()  # snapshot
+            r = client.post("/api/character/touch", headers=H)
+            assert r.status_code == 200 and r.json()["activity"] == "listening"
+            ev = ui.receive_json()
+            while ev["type"] != "character.state":
+                ev = ui.receive_json()
+            assert ev["payload"]["activity"] == "listening" and ev["payload"]["attention"] == "user"

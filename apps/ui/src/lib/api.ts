@@ -1,4 +1,4 @@
-import type { ActionRecord, ActionResult, AuditRow, Device } from './types'
+import type { ActionRecord, ActionResult, AuditRow, CharacterState, Device } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -34,6 +34,7 @@ export class Api {
   deny = (id: string, denied_by: string) =>
     this.req<ActionResult>('POST', `/api/approvals/${id}/deny`, { denied_by })
   audit = (limit = 100) => this.req<AuditRow[]>('GET', `/api/audit?limit=${limit}`)
+  touch = () => this.req<CharacterState>('POST', '/api/character/touch')
 }
 
 /** Opens /ws/events and keeps it open; delivers every event (plus a synthetic

@@ -28,6 +28,7 @@ from pydantic import BaseModel, ValidationError
 
 from nero_core.actions import ActionService, ApprovalNotFound
 from nero_core.bus import EventBus
+from nero_core.character_host import CharacterHost
 from nero_core.config import Settings
 from nero_core.gateway import DeviceGateway
 from nero_core.protocol import ActionRequest, ActionStatus, Event
@@ -47,6 +48,7 @@ class Core:
         self.core_key: KeyPair | None = None
         self.gateway: DeviceGateway | None = None
         self.actions: ActionService | None = None
+        self.character: CharacterHost | None = None
         self._tasks: list[asyncio.Task[Any]] = []
 
     async def start(self) -> None:
@@ -63,9 +65,15 @@ class Core:
                                      pairing_code_ttl_s=s.pairing_code_ttl_s)
         self.actions = ActionService(store=self.store, bus=self.bus, dispatcher=self.gateway,
                                      approval_ttl_s=s.approval_ttl_s, critical_enabled=s.critical_enabled)
+        self.character = CharacterHost(bus=self.bus, cfg=s.character_config(),
+                                       tick_interval_s=s.character_tick_s)
+        self.character.attach()
+        self.character.start()
         self._tasks.append(asyncio.create_task(self._housekeeping()))
 
     async def stop(self) -> None:
+        if self.character:
+            await self.character.stop()
         for t in self._tasks:
             t.cancel()
         for t in self._tasks:
@@ -212,6 +220,24 @@ def create_app(settings: Settings) -> FastAPI:
     async def audit(limit: int = 100) -> list[dict[str, Any]]:
         return await core.store.list_audit(limit=limit)
 
+    async def _snapshot() -> dict[str, Any]:
+        assert core.character
+        return {
+            "devices": [d.model_dump() for d in await core.store.list_devices()],
+            "approvals": [r.model_dump() | {"risk": r.risk} for r in await svc().list_pending_approvals()],
+            "character": core.character.snapshot(),
+        }
+
+    @app.get("/api/state", dependencies=[Depends(auth)])
+    async def state() -> dict[str, Any]:
+        return await _snapshot()
+
+    @app.post("/api/character/touch", dependencies=[Depends(auth)])
+    async def character_touch() -> dict[str, Any]:
+        await core.bus.emit("character.touch", source="ui")
+        assert core.character
+        return core.character.snapshot()
+
     @app.websocket("/ws/agent")
     async def agent_ws(ws: WebSocket) -> None:
         await ws.accept()
@@ -242,10 +268,7 @@ def create_app(settings: Settings) -> FastAPI:
 
         unsub = core.bus.subscribe("*", on_event)
         # initial snapshot so a (re)connecting UI never starts from a blank state
-        snapshot = Event(type="ui.snapshot", payload={
-            "devices": [d.model_dump() for d in await core.store.list_devices()],
-            "approvals": [r.model_dump() | {"risk": r.risk} for r in await svc().list_pending_approvals()],
-        })
+        snapshot = Event(type="ui.snapshot", payload=await _snapshot())
         await ws.send_json(snapshot.model_dump())
 
         async def pump() -> None:

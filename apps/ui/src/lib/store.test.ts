@@ -74,4 +74,19 @@ describe('store reducer', () => {
     expect(s.connected).toBe(false)
     expect(s.devices.a).toBeDefined()
   })
+
+  it('snapshot carries character state and character.state updates it', () => {
+    let s = reduce(initialState, ev('ui.snapshot', {
+      devices: [], approvals: [],
+      character: { schema: 1, activity: 'idle', mood: 'neutral', attention: 'none', energy: 1 },
+    }))
+    expect(s.character).toMatchObject({ activity: 'idle', energy: 1 })
+    s = reduce(s, ev('character.state', { schema: 1, activity: 'sleeping', mood: 'sleepy', attention: 'none', energy: 0.4 }))
+    expect(s.character).toMatchObject({ activity: 'sleeping', mood: 'sleepy', energy: 0.4 })
+  })
+
+  it('snapshot without character keeps the default character', () => {
+    const s = reduce(initialState, ev('ui.snapshot', { devices: [], approvals: [] }))
+    expect(s.character.activity).toBe('idle')
+  })
 })

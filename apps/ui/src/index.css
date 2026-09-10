@@ -110,6 +110,16 @@ a { color: inherit; }
 .device .sub { padding: 8px 10px; border-top: 1px solid var(--line); }
 .empty { padding: 32px; text-align: center; color: var(--fg-mute); font-family: var(--mono); font-size: 12px; }
 
+/* ---- character */
+.character-b { display: grid; grid-template-columns: max-content 1fr; gap: 12px; padding: 10px; cursor: pointer; align-items: center; }
+.character-b:hover { background: var(--panel-2); }
+.character-art { font-size: 14px; color: var(--fg); }
+.character-art[data-mood="sleepy"] { color: var(--fg-dim); }
+.character-art[data-mood="annoyed"], .character-art[data-mood="confused"] { color: var(--accent); }
+.character-art[data-mood="happy"] { color: var(--ok); }
+.character-art[data-fallback="true"] { color: var(--warn); }
+.character-meta { font-size: 11px; display: grid; gap: 6px; }
+
 /* ---- approvals */
 .approval { padding: 10px; border-bottom: 1px solid var(--line); background: #150c0c; }
 .approval .who { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
