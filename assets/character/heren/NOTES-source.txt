@@ -1,0 +1,7 @@
+Kareler soldan sağa, yukarıdan aşağıya numaralandırıldı. Orijinal görseller ve HTML önizlemeleri korundu.
+Idle/Frames: 8 kare. Mevcut idle oynatma sırası: 01,02,03,02,01,05,06,05,01,02,03,02,01. Saçı ters dönen 04 dahil tüm kaynak kareler kaydedildi; kullanılmayanlar frames.json içinde işaretli.
+Notice/Frames: 4 kare. Kaynak görselde satırlar eşit olmadığı için 704. pikselden bölündü; alt sıranın şapkaları kesilmedi. Kareler 512x832 boyutuna alttan arka plan rengiyle tamamlandı. Yeniden boyutlandırma yapılmadı.
+Thinking/Frames: 8 kare. Giriş: 01,02,03,04. Döngü: 05,06,07,06,05,08,07,06.
+Done/Frames: 8 kare, 01–08 sırasıyla. Thinking giriş ve Idle bitiş görselleri Done/Gecis_Thinking_Frames ve Done/Gecis_Idle_Frames içinde ayrıca ayrıldı.
+Her klasördeki frames.json kaynak kırpma koordinatlarını içerir. Bunlar ham PNG kareleridir; HTML içindeki hizalama ve geçiş yumuşatması PNG'lere uygulanmadı.
+beta0-character.png tek karakter referansıdır, kare sayfası değildir; olduğu gibi korundu.

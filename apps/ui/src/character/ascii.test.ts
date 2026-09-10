@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeFrames, resolveAnimation, type AsciiAssetPack } from './ascii'
+import { nextFrameIndex, normalizeFrames, resolveAnimation, type AsciiAssetPack } from './ascii'
 
 const pack: AsciiAssetPack = {
   cell: { cols: 6, rows: 3 },
@@ -49,5 +49,62 @@ describe('normalizeFrames', () => {
   it('keeps tabs-free leading spaces exactly (whitespace is the drawing)', () => {
     const out = normalizeFrames(['   ^\n  / \\'], { cols: 5, rows: 2 })
     expect(out[0]).toBe('   ^ \n  / \\')
+  })
+})
+
+// ---------------------------------------------------------------- pack v2: named frames + sequences
+
+const v2: AsciiAssetPack = {
+  cell: { cols: 4, rows: 1 },
+  fps: 8,
+  frames: { a: 'AAAA', b: 'BBBB', c: 'CCCC', d: 'DDDD' },
+  animations: {
+    // sequences reference named frames; intro plays once, loop repeats
+    'thinking': { intro: ['a', 'b'], loop: ['c', 'd', 'c'] },
+    'speaking': { loop: ['a', 'b'], fps: 2 },
+    'idle': { frames: ['(o)'] },               // v1 inline frames still work
+    'waking': { intro: ['d'] },                 // intro only: ends holding the last frame
+    'default': { frames: ['????'] },
+  },
+}
+
+describe('resolveAnimation with named frames and intro/loop', () => {
+  it('expands sequences into normalized frames and reports the loop start', () => {
+    const a = resolveAnimation(v2, 'thinking', 'neutral')
+    expect(a.frames).toEqual(['AAAA', 'BBBB', 'CCCC', 'DDDD', 'CCCC'])
+    expect(a.loopStart).toBe(2)
+    expect(a.fps).toBe(8)
+  })
+  it('loop-only sequences start looping at 0', () => {
+    const a = resolveAnimation(v2, 'speaking', 'neutral')
+    expect(a.frames).toEqual(['AAAA', 'BBBB'])
+    expect(a.loopStart).toBe(0)
+    expect(a.fps).toBe(2)
+  })
+  it('intro-only sequences hold the last frame (loopStart = last index)', () => {
+    const a = resolveAnimation(v2, 'waking', 'neutral')
+    expect(a.frames).toEqual(['DDDD'])
+    expect(a.loopStart).toBe(0)
+  })
+  it('inline v1 frames keep working and loop from 0', () => {
+    const a = resolveAnimation(v2, 'idle', 'neutral')
+    expect(a.frames).toEqual(['(o) '])
+    expect(a.loopStart).toBe(0)
+  })
+  it('an unknown frame name is skipped, never crashes, and is reported', () => {
+    const p: AsciiAssetPack = { ...v2, animations: { 'idle': { loop: ['a', 'nope', 'b'] } } }
+    const a = resolveAnimation(p, 'idle', 'neutral')
+    expect(a.frames).toEqual(['AAAA', 'BBBB'])
+    expect(a.missing).toEqual(['nope'])
+  })
+})
+
+describe('nextFrameIndex', () => {
+  it('runs through the intro once then cycles the loop', () => {
+    const seq = [0, 1, 2, 3, 4].map(i => nextFrameIndex(i, 5, 2))
+    expect(seq).toEqual([1, 2, 3, 4, 2])
+  })
+  it('a single frame stays put', () => {
+    expect(nextFrameIndex(0, 1, 0)).toBe(0)
   })
 })

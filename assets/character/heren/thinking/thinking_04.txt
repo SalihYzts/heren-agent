@@ -1,0 +1,115 @@
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                  $++xx+xX$;                                                                                
+                                               :X+++xxxxxx++++xX$+                                                                          
+                                             +Xx++++++xxxxx++++xxxxxx$x.                                                                    
+                                           Xxxxxx+xxx+++xxx++++xxxxxxxXXX$$$XXX$$$x                                                         
+                                         $xxxxxxxxxx+++++xxx$ .......     ........ .:                                                       
+                                       $+xxxxx++xxx++xxxxxxXx..;XXXXXxxxxxXXXXXX$:. XXX                                                     
+                                     $+++++Xx. :x+xxxxxXXXxXx..xXXXXxxxxxXXXXXXXX$..+xXxX;                                                  
+                                  .$xxxx$:..... ++XXxxXXXXXXx..+XXXxxxxxXXXXXXXXXX...XXxxx+&                                                
+                                :XxxxX ..:$$$$. ++XxxxxxxxXX$:.:XXxxxxxXXXXXXXXXXX:. $XX+++++X.                                             
+                              :XxxX.. +XxXXXX$;.:xXxxxxxxxxX$:..$xxxxxXXXXXXXXXXXXx..XxXX++xxxxx+                                           
+                            :XxX:. ;XxxxXXXXXXx. x$xXX$$XXXXX;  XxxxxXXXXXXXXXXXXXX..+xXxxxxxxxxx+$                                         
+                          ;XX$.  XXXxxxXXXXXXXX  ;+X$Xxxx++XX+  .xxxxXXXXXXXXXXXXX$  :xXxxxXx++xxx+xx+                                      
+                         X+xx$. XXXxxxxXXXXXXXX  :;$xxxxx+++XX; ......    .........  ;XXxxx+X+++++++++xX                                    
+                       :x++xx$..$XXxxxXXXXXXXX$..:+$xxXXXx++xxXxxxxxxxxxx++++xxxxx+++$$$xx;..;++++++++xxx+                                  
+                       :Xxxx$X:.xXxxxXXXXXXXx ...$XXxx$XXXXXX$$$XXxxxxxxxxxXXXXXxxXXxxX$$$x ..$+++xxxxxxxx:                                 
+                        $Xxx$x+.:+xxxXXXXX.. .XXX$xxXXXXXXXXX$$$$$$$Xxxx++xxxxxx++++xxxxX$XX:+XX+++xxxxxx+X                                 
+                        :XxxXxX .XxxXX$:. ;xxXXXXXX$XXXXXXXXX$X;+xX$$$XX$XXxxxxx+++xxxxxxx$XXxxxX+++xxxxxx+                                 
+                         $XXXXX .++x:..;XxXXxxxX$$$$XXXXXXXXXx;:.........:+xXXXx+++xxxxx++xXXXxxxX+xxxxxxX                                  
+                   +$XXXX$$$$$$x.... XxX$xxx$XXX$$$XXXXXXXXX$;................;;;$$$$x++++xxx$XxxxXxxxxxx+                                  
+                x$XXXXXXXXXXXXXX;.xXX$Xxx$XXXXXX$$XXXXXXXXX$x.............;xXx:.:x$$$$$xxxXXxx$XxxXxxxxx$$                                  
+              XX$XXXXXXXXXXXXXXXXX$$XXXXXXXXXXX$X+XXXXXXXXX$:..........;$$$$$x+XX.XXXXXX$Xx+++x$Xxx$xxxXXXxxx                               
+             $XXXXXXXXXXXXXXXXXX$$$$$XXXXXXXXX$;:+XXXXXXXXX$.........X$$$$x ...... $XXXXXX$xx++x&X$$XxxXxxxx++X                             
+            $$$$$$$XXX$XXXXXXXXX$$$$XXXXXXXXXX; .:&$XXXXXXXX;......$$$$$;...........XXXXXXXX$Xxxx$XX$xxxxxxxxxxxx                           
+           $$$$$$X. xXXXXXXXXXXX$$XXXXXXXXXXx; ...+$XXXXXXXXX ..:$$$$$:........   ...XXXXXXXXXXXXX$X$xxxxXxxxxxxx$                          
+          x$X$;    $XXXXXXXXXX$XXXXXXXXXXXXx;+$$$X$$XXXXXXXXX;...;$X:..$&$   .$;   ..:$$$XXXXXXXXXXXXXXX$xxxxxxxxx$                         
+          $$     ;$XXXXXXXXXXXXXXXXXXXXXXX+:$&&$X$$$$XXXXXXXX$ ......:&&&&$x    X.....:$$XXXXXXXXXXXXXX$XxxxxxxxxxX                         
+                 $$$$$XXXXX;X$XXXXXXXXXXXX;+.........;$$$XXXXXX  ... &&&&&$X     ;.....:$$$XXXXXXXXX$$$xx++xxxxxxxX                         
+                $XXXXXXXXx XXXXXXXXXXXX$&&;..... ;xx+::;$XXXXXX$ ....;+XX$X       ......$$$$$$$X+:.:$$XX$x+++xxxx$                          
+                $XXXXXX$  &$$$XXXXXXXXX&$$+.   $&&$x   .;.XXXXXXX.....             .....x$$$$$:.......$$$$$XxxxxX                           
+                &$$XXXx  $$$XXXXXXXXXX&$$$$   ;&&&&$      ...:XXXXX...            .......XX$Xx  x......$XXX$XXX.                            
+                :$$$$;  $XXXXXXXX$XXX$$$$$$+  :X$$$x        :  ........          ......  $XX$ X;.......$XXX$XX                              
+                 ;$$+  :XXXXXXXXX$$$X$$$$$$$:..             .:............    ...........$XXx  +;......$$$X$.                               
+                   $   +XXX$$$$$$&$$X$$$$$$$$ .             .;...........................$$$..  x    ..&$$XX     x$$.                       
+                        $$$$$$$& XXX$$$$$$XXXx  .          .X............................$$....:.     $XXXX$$$$$$$$X                        
+                        x$$$$$$   .Xx$&&$XXXXX.....      .;:   ................ ;: ......&..........:$XXXXXXXXX$$$x                         
+                         :XXXX.    X$&&X.  XXXX...........$:..   ..............;$ ..........  ....:&$$$$$XXXXX$$$                           
+                           +$$    $$$$x. . xXX$. . ....... $;;;;;;. .........+$ ........  x$:  ;$X$$$$$$$$XX$$.                             
+                                 XXXX$ .....;X$x.............xx;.   ......;$:............ $$$$$$XXXXXX$$XX+                                 
+                                 &XX$$+.......+$.............  ........xX................x$$$$$$$XXXXXXXXX$                                 
+                                 &$$$$&........:X...........    ...X$: ..................$$$$$$$XXXXXXXX$XX;                                
+                                  $X$  ;.........x...........;x$;......................:&$$$$$$$XXX$XXX$$$$:                                
+                                   $$    X:.......X...............................   .x$$$$$$$$$$$;  XXXXXX                                 
+                                            +XXX$$$$:............................   :x:$$$$$$$$$&     .XX+                                  
+                                             $X$$$$$$$............................:X: .$$$$XX$;                                             
+                                           .$$$$$$$$$$$$x.......................;X;:...$$$$XXX;                                             
+                                        .$XXX$$$$$$$$$$$$$$;.....   ....   ...x+;;.....$$$$$$$$XXXx                                         
+                                           x$$X;  &$$$$$$$$$$X  .$: ..  ...+$;;;;.....:$$XXX$$$$$+                                          
+                                                  ;$$$$+X$$;..    ..+$  x&;;;;;........:x&&$$x                                              
+                                                    &$$ x:......:... +X;;;;:::.........xx:                                                  
+                                                    :x$.......:XXX+;::X;;;;;......... .:    .X+                                             
+                                               :&;  x ...;+X$+.     .&;x;;:.........   ;...      +:                                         
+                                              ;    X ................;x;. ...........  x....      .                                         
+                                             X    .:........:+xxxxxxXXX.  .............++.:.       x                                        
+                                        ;X. .     $ ..................$  ................x          x                                       
+                                x&$+        x    x ...........   .....:+.............. .+           x  ;&.                                  
+                          .$:              +     +............. ......xX...........   .X             .      xx                              
+                        X                  +    &.....................x:..............$              $          .X+                         
+                      X                   X    ::.....................$ .........   :x               x               X;                     
+                    ..                    :    X.............. .X$X+;+;   ..:Xx:. .:.    x..X         :                 $                   
+                    :         .          X   +$................++;;;X:....: ......+    X......$       x                  x                  
+                   +           ;        :  x::x...............+$;+;;........   :X&   :;.........X     x                   $                 
+                  $             ;       ;    &...............;&XXX$X:. ...+$$xxxx    X...     .   $   ;          .         +                
+                 x               .          x...............:$ XXXXxxxxxxxxxXXX      :.            .+.;         .          +                
+                 +                         +:..............;$..:XxxxxxxxxxXXX$        $                                     x               
+                X           .     .       +..............:x+.   :XxxxxxxxxxxX         :;                       :            +               
+                X            :           :;............;xx.:x    +xxxxxxxxX.      .$                          x              x              
+               +              .    +.    ;............;+.....:+   XxxxxXX$     xx                            :               &              
+               X                :  .:  .;............;$......  .:  $Xxxxx   +;                    ;:         :                .             
+              .:                 x. X.:+.............++....      .  XXX   +                      xXX.       x     .           X             
+              $                   X.+$:.............:$...           .$ +                        XXXXX       .    +            x             
+              $              ..    $X.  ............+:..            X                           $XXXX      +    x              :            
+              ;     .            ..$ ..............:$..            &                     .:;;+x+$XxXX      +   X               $            
+             ;    ;               X................x;.               ;++$         .              Xx$  .  .+   X                x            
+             $..x               x:.................$              :  $xxx         :.            +XX$  .  .x .X                              
+             &:           .....$..................+;.             +               .             $XXx..   :..X                   x           
+           +.         ..;xxxx&:...................&               x                             $XX.     X x                    X           
+          x        :$      .X....................;;               X                             .X:  .  .X$                     +:          
+         :       X      ..&..................... $                X  Xxx+                            :  :&.                       X         
+         .     ;         X......................;+                X  xxxx                            :  ;;.                         ;       
+         &   .;        +........................&                 X   ::                                x:           ;.             &       
+          X..        :&........................;:                 X                                    .x..      $         ...     .        
+           X.       $X.........................$                  X                                 .  .$:    ;.      ........     x        
+           X       X;;........................x                   X               ...                  .$X .:      :X$x:.    ;XX. X         
+          x       $;; .......................:x                   X                                   ..$......XX                 :$        
+          $      X;:.........................$                    $                                  ...$ ..x+                       x      
+          X      X;.........................x.                    X  xxxx                            ...$$&.                         :      
+          x      &;:.......................;x                     X  $++$                           ....$x.                          X      
+           $     :x:.....................:;X..                    X                                 ....$....                      +:.      
+            $.   .;;....................;;$...                    X                                .....$  X                        x       
+             :+..  +;.................;;x+....                    $                               .... .X$X        ;$$Xx+xX$x.      +       
+               x:  .+..............;;;;&......                    $                              ...   .+X     +X:;;;;;;;;;;;;:+X    +      
+                 :$:.x.........   ;;;$+....                       $                              ..     ++   X;;;;:........  :;;;&+  X      
+                      +..........;;xX+.....                       X                             .       ;X. +X;;............ ..:;$.. X      
+                       .x;:...:;;xx;:.....                        X  $+xX                              .:$x. X:..................$..$       
+                          $X;;x&:  $.....                         x  Xxxx                              ..$ :$$...................x$         
+                                   x....                          x                                    ..X   ;..................::          
+                                  x...                            X                                    ..:.   X.................x           
+                                  X..                             x                                   ... x   x;................$           
+                                  :.                              x                                   ..  $    X............... X           
+                                 $..                              +                                   .   +    $;...............:           
+                                 X.                               ;                                  .  ...x    x..............+            
+                                ;:                                :   Xx$                            .  ...$    X..............$            
+                                $                                 .  Xxxx;                              ...;.   :;.............X            
+                                x                                 ..  ;X:                                ...$    x............:;            
+                               x.                                 X;                                     ...X    $............+             
+                               &                                  ;x                                       ..:   &............X             
+                               ;                                 $.&                                      ...$   x........... X             
+                              x                                 ;..&                                      ...x .+.............$             
+                              $                                 x..X                                       ..:$:..............X             
+                             :;                                X...;.                                      ..x.  .............;             
+                                                               :....;                                       ::.         ..... .+            
+                                                                                                                                            

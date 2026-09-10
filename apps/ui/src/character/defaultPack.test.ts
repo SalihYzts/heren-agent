@@ -24,7 +24,7 @@ describe('defaultPack', () => {
   })
   it('no raw frame exceeds the cell (art would be silently clipped)', () => {
     for (const [key, anim] of Object.entries(defaultPack.animations)) {
-      for (const f of anim.frames) {
+      for (const f of anim.frames ?? []) {
         const lines = f.split('\n')
         expect(lines.length, key).toBeLessThanOrEqual(defaultPack.cell.rows)
         for (const l of lines) expect(l.length, `${key}: "${l}"`).toBeLessThanOrEqual(defaultPack.cell.cols)
@@ -33,7 +33,7 @@ describe('defaultPack', () => {
   })
   it('every multi-frame animation actually changes between frames', () => {
     for (const [key, anim] of Object.entries(defaultPack.animations)) {
-      if (anim.frames.length > 1) expect(new Set(anim.frames).size, key).toBeGreaterThan(1)
+      if ((anim.frames ?? []).length > 1) expect(new Set(anim.frames).size, key).toBeGreaterThan(1)
     }
   })
 })

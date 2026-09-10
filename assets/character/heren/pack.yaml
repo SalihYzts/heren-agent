@@ -1,0 +1,49 @@
+# Heren character pack — sequences per activity (and activity.mood).
+# Playback orders come from the artist's FRAME_BILGISI.txt (see NOTES-source.txt).
+name: heren
+fps: 6
+
+animations:
+  # idle: 01,02,03,02,01,05,06,05,01,02,03,02,01  (04 = flipped hair, unused; 07/08 spare)
+  idle:
+    loop: [idle_01, idle_02, idle_03, idle_02, idle_01, idle_05, idle_06, idle_05, idle_01, idle_02, idle_03, idle_02, idle_01]
+  idle.sleepy:            # slower breathing, fewer moves
+    fps: 2
+    loop: [idle_01, idle_01, idle_02, idle_02, idle_01, idle_01, idle_05, idle_05]
+  idle.happy:             # done tail = warm smile
+    loop: [done_07, done_08, done_07, done_06, idle_01, idle_02, idle_03, idle_02]
+
+  # someone spoke / touched: notice sequence then hold
+  listening:
+    intro: [notice_01, notice_02, notice_03]
+    loop: [notice_04, notice_03, notice_04]
+
+  # thinking: intro 01-04 once, chin-rub loop 05,06,07,06,05,08,07,06
+  thinking:
+    intro: [thinking_01, thinking_02, thinking_03, thinking_04]
+    loop: [thinking_05, thinking_06, thinking_07, thinking_06, thinking_05, thinking_08, thinking_07, thinking_06]
+  working:
+    fps: 8
+    loop: [thinking_05, thinking_06, thinking_07, thinking_08, thinking_07, thinking_06]
+  thinking.confused:
+    fps: 4
+    loop: [thinking_04, thinking_05, thinking_04, thinking_01]
+
+  # speaking: hand drops from chin (done 01-08) then relaxed forward-gaze idle
+  speaking:
+    intro: [done_01, done_02, done_03, done_04, done_05, done_06, done_07, done_08]
+    loop: [idle_01, idle_02, idle_01, idle_05, idle_01, idle_02]
+
+  # waking: same release gesture, slower
+  waking:
+    fps: 3
+    intro: [done_03, done_04, done_05, done_06, done_07, done_08]
+    loop: [idle_01]
+
+  # sleeping: frozen pose — the presentation layer dims/tints it
+  sleeping:
+    fps: 1
+    loop: [idle_01]
+
+  default:
+    loop: [idle_01]
