@@ -77,3 +77,13 @@ async def test_snapshot_dict_matches_engine(host):
     h, *_ = host
     d = h.snapshot()
     assert d["activity"] == "idle" and d["mood"] == "neutral" and d["energy"] == 1.0
+
+
+async def test_voice_playback_events_extend_speaking(host):
+    h, bus, clk, out = host
+    await bus.emit("hermes.speaking")
+    await bus.emit("voice.playback.started", clip_id="c1")
+    await bus.emit("hermes.done")
+    assert h.engine.state().activity == "speaking"
+    await bus.emit("voice.playback.finished")
+    assert h.engine.state().activity == "idle"

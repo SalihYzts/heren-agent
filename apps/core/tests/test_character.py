@@ -260,3 +260,32 @@ def test_sleeping_is_presentation_only_engine_still_accepts_events():
     e.device_action_completed()  # background work continues; character doesn't have to wake
     assert e.state().activity == Activity.SLEEPING
     assert e.state().mood == Mood.SLEEPY  # no "happy" while asleep
+
+
+# ----------------------------------------------------------------- voice playback
+
+def test_character_keeps_speaking_while_audio_plays_after_hermes_is_done():
+    e, clk = engine("14:00")
+    e.assistant_thinking()
+    e.assistant_speaking()
+    e.speech_started()          # UI started playing the first clip
+    e.assistant_done()          # Hermes run finished before the audio did
+    assert e.state().activity == Activity.SPEAKING
+    e.speech_finished()
+    assert e.state().activity == Activity.IDLE
+
+
+def test_speech_without_audio_still_ends_on_done():
+    e, clk = engine("14:00")
+    e.assistant_speaking()
+    e.assistant_done()
+    assert e.state().activity == Activity.IDLE
+
+
+def test_speech_finished_when_not_speaking_is_harmless():
+    e, clk = engine("14:00")
+    e.speech_finished()
+    assert e.state().activity == Activity.IDLE
+    e.assistant_thinking()
+    e.speech_finished()         # stray event mid-thought must not knock the activity
+    assert e.state().activity == Activity.THINKING

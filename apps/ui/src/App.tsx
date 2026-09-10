@@ -9,6 +9,8 @@ import { DeviceCard } from './components/DeviceCard'
 import { Login } from './components/Login'
 import { Activity, Audit } from './components/Logs'
 import { PairingModal } from './components/PairingModal'
+import { VoiceBar } from './components/VoiceBar'
+import { useVoice } from './voice/useVoice'
 
 const KEY_STORAGE = 'heren.api_key'
 const APPROVER = 'ui:dashboard'
@@ -47,7 +49,9 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
     toastTimer.current = window.setTimeout(() => setToast(null), 4000)
   }, [])
 
-  useEffect(() => connectEvents(apiKey, dispatch), [apiKey])
+  const voice = useVoice(api)
+  const onEvent = useCallback((e: Parameters<typeof dispatch>[0]) => { dispatch(e); voice.handleEvent(e) }, [voice.handleEvent])
+  useEffect(() => connectEvents(apiKey, onEvent), [apiKey, onEvent])
 
   const loadAudit = useCallback(() => api.audit(100).then(setAudit).catch(() => {}), [api])
   useEffect(() => { if (tab === 'audit') loadAudit() }, [tab, loadAudit, state.activity.length])
@@ -101,6 +105,8 @@ function Dashboard({ apiKey, onLogout }: { apiKey: string; onLogout: () => void 
             ))}
           </div>
           <Conversation rows={state.conversation} hermes={state.hermes} onAsk={onAsk} />
+          <VoiceBar voice={state.voice} speaking={voice.speech.speaking} queued={voice.speech.queued}
+            recorder={voice.recorder} onStop={voice.stopSpeaking} />
         </div>
         <div>
           <CharacterPanel state={state.character} onTouch={onTouch} />

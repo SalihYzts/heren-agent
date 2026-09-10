@@ -112,6 +112,7 @@ class CharacterEngine:
         self._waking_until = 0.0
         self._listening_until = 0.0
         self._tools_running = 0
+        self._audio_playing = False
         self._pending_approvals = 0
         self._reaction: _Reaction | None = None
         self._user_attention = False
@@ -178,8 +179,20 @@ class CharacterEngine:
     def assistant_done(self) -> None:
         self._tools_running = 0
         self._user_attention = False
-        self._activity = Activity.IDLE
         self._last_interaction = self._t()
+        # audio may outlive the Hermes run: stay SPEAKING until playback reports finished
+        self._activity = Activity.SPEAKING if self._audio_playing else Activity.IDLE
+
+    def speech_started(self) -> None:
+        self._audio_playing = True
+        if self._activity in (Activity.IDLE, Activity.SPEAKING, Activity.LISTENING):
+            self._activity = Activity.SPEAKING
+
+    def speech_finished(self) -> None:
+        self._audio_playing = False
+        if self._activity == Activity.SPEAKING:
+            self._activity = Activity.IDLE
+            self._last_interaction = self._t()
 
     def device_action_completed(self) -> None:
         if self._activity != Activity.SLEEPING:

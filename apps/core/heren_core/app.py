@@ -10,7 +10,12 @@ Routes:
     POST /api/approvals/{id}/approve      {approved_by}
     POST /api/approvals/{id}/deny         {denied_by}
     GET  /api/audit                       newest first
-    GET  /api/state                       character + counts snapshot (phase 4 fills this)
+    GET  /api/state                       devices/approvals/character/hermes/voice snapshot
+    POST /api/ask                         {text} → Hermes (events stream on the bus)
+    GET  /api/voice/audio/{id}.wav        synthesized sentence clip (announced by voice.speech)
+    POST /api/voice/transcribe?ask=       WAV body → STT → optional ask
+    POST /api/voice/stop                  barge-in: drop pending speech
+    ANY  /mcp                             MCP server for Hermes (separate bearer)
     WS   /ws/agent                        device agents (hello → signed envelopes)
     WS   /ws/events?token=                UI event stream (every bus event as JSON)
 """
@@ -19,11 +24,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 from starlette.types import Receive, Scope, Send
 
@@ -37,6 +43,8 @@ from heren_core.mcp_server import BearerGate, build_mcp_server
 from heren_core.protocol import ActionRequest, ActionStatus, Event
 from heren_core.security import KeyPair
 from heren_core.storage import Storage
+from heren_core.voice.host import VoiceHost
+from heren_core.voice.providers import resolve_stt, resolve_tts
 
 log = logging.getLogger("heren.app")
 
@@ -53,6 +61,7 @@ class Core:
         self.actions: ActionService | None = None
         self.character: CharacterHost | None = None
         self.hermes: HermesBridge | None = None
+        self.voice: VoiceHost | None = None
         self.mcp_app: Any = None
         self._tasks: list[asyncio.Task[Any]] = []
 
@@ -77,9 +86,17 @@ class Core:
         self.hermes = HermesBridge(bus=self.bus, endpoint=s.hermes_endpoint, api_key=s.hermes_api_key,
                                    session_id=s.hermes_session_id, language=s.hermes_language,
                                    request_timeout_s=s.hermes_request_timeout_s)
+        tts = await asyncio.to_thread(resolve_tts, s.tts_provider, s.tts_options)
+        stt = await asyncio.to_thread(resolve_stt, s.stt_provider, s.stt_options)
+        log.info("voice: tts=%s stt=%s", tts.name, stt.name)
+        self.voice = VoiceHost(bus=self.bus, tts=tts, stt=stt, character_state=self.character.snapshot,
+                               language=s.language, max_clips=s.voice_max_clips)
+        self.voice.attach()
         self._tasks.append(asyncio.create_task(self._housekeeping()))
 
     async def stop(self) -> None:
+        if self.voice:
+            await self.voice.stop()
         if self.character:
             await self.character.stop()
         for t in self._tasks:
@@ -102,6 +119,11 @@ class Core:
 
 
 # ------------------------------------------------------------------ request models
+
+
+class PlaybackIn(BaseModel):
+    state: Literal["started", "finished"]
+    clip_id: str | None = None
 
 
 class AskIn(BaseModel):
@@ -279,18 +301,56 @@ def create_app(settings: Settings) -> FastAPI:
             "approvals": [r.model_dump() | {"risk": r.risk} for r in await svc().list_pending_approvals()],
             "character": core.character.snapshot(),
             "hermes": {"endpoint": settings.hermes_endpoint, "reachable": await core.hermes.healthy()},
+            "voice": {"tts": core.voice.tts.name if core.voice else "none",
+                      "stt": core.voice.stt.name if core.voice else "none", "language": settings.language},
         }
 
     @app.get("/api/state", dependencies=[Depends(auth)])
     async def state() -> dict[str, Any]:
         return await _snapshot()
 
+    async def _ask(text: str) -> dict[str, Any]:
+        assert core.hermes and core.character
+        char = core.character.snapshot() | {"time": time.strftime("%H:%M")}
+        res = await core.hermes.ask(text, character=char)
+        return {"ok": res.ok, "text": res.text, "error": res.error, "run_id": res.run_id}
+
     @app.post("/api/ask", dependencies=[Depends(auth)])
     async def ask(body: AskIn) -> dict[str, Any]:
-        assert core.hermes and core.character
-        char = core.character.snapshot() | {"time": __import__("time").strftime("%H:%M")}
-        res = await core.hermes.ask(body.text, character=char)
-        return {"ok": res.ok, "text": res.text, "error": res.error, "run_id": res.run_id}
+        return await _ask(body.text)
+
+    # ---- voice -------------------------------------------------------------
+
+    @app.get("/api/voice/audio/{clip_id}.wav", dependencies=[Depends(auth)])
+    async def voice_audio(clip_id: str) -> Response:
+        clip = core.voice.clip(clip_id) if core.voice else None
+        if clip is None:
+            raise HTTPException(404, "no such clip")
+        return Response(clip.wav, media_type="audio/wav", headers={"Cache-Control": "private, max-age=600"})
+
+    @app.post("/api/voice/transcribe", dependencies=[Depends(auth)])
+    async def voice_transcribe(request: Request, ask: bool = False) -> dict[str, Any]:
+        assert core.voice
+        wav = await request.body()
+        if not wav.startswith(b"RIFF"):
+            raise HTTPException(400, "expected a WAV body (RIFF)")
+        t = await core.voice.transcribe(wav)
+        out: dict[str, Any] = {"text": t.text, "language": t.language, "confidence": t.confidence, "asked": False}
+        if ask and t.text.strip():
+            out["asked"] = True
+            out["ask"] = await _ask(t.text)
+        return out
+
+    @app.post("/api/voice/stop", dependencies=[Depends(auth)])
+    async def voice_stop() -> dict[str, Any]:
+        await core.bus.emit("voice.interrupt", source="ui")
+        return {"ok": True}
+
+    @app.post("/api/voice/playback", dependencies=[Depends(auth)])
+    async def voice_playback(body: PlaybackIn) -> dict[str, Any]:
+        # the browser is the only one who knows when audio actually plays; the character follows it
+        await core.bus.emit(f"voice.playback.{body.state}", clip_id=body.clip_id, source="ui")
+        return {"ok": True}
 
     @app.post("/api/character/touch", dependencies=[Depends(auth)])
     async def character_touch() -> dict[str, Any]:

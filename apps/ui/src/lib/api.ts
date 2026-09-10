@@ -36,6 +36,24 @@ export class Api {
   audit = (limit = 100) => this.req<AuditRow[]>('GET', `/api/audit?limit=${limit}`)
   touch = () => this.req<CharacterState>('POST', '/api/character/touch')
   ask = (text: string) => this.req<{ ok: boolean; text: string; error: string | null }>('POST', '/api/ask', { text })
+
+  // ---- voice ----
+  voiceStop = () => this.req<{ ok: boolean }>('POST', '/api/voice/stop')
+  playback = (state: 'started' | 'finished', clip_id?: string) =>
+    this.req<{ ok: boolean }>('POST', '/api/voice/playback', { state, clip_id })
+  transcribe = async (wav: ArrayBuffer, ask = false) => {
+    const r = await fetch(`${this.base}/api/voice/transcribe?ask=${ask}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${this.key}`, 'Content-Type': 'audio/wav' }, body: wav,
+    })
+    if (!r.ok) throw new ApiError(r.status, r.statusText)
+    return r.json() as Promise<{ text: string; asked: boolean; confidence: number | null }>
+  }
+  /** Authenticated fetch of a synthesized clip (for <audio> playback via blob URL). */
+  clip = async (url: string) => {
+    const r = await fetch(this.base + url, { headers: { Authorization: `Bearer ${this.key}` } })
+    if (!r.ok) throw new ApiError(r.status, r.statusText)
+    return r.blob()
+  }
 }
 
 /** Opens /ws/events and keeps it open; delivers every event (plus a synthetic

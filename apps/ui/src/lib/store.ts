@@ -24,6 +24,14 @@ export interface HermesStatus {
   tool: string | null
 }
 
+export interface VoiceStatus {
+  tts: string
+  stt: string
+  language: string
+  transcript: string | null
+  error: string | null
+}
+
 export interface State {
   connected: boolean
   devices: Record<string, Device>
@@ -33,6 +41,7 @@ export interface State {
   character: CharacterState
   hermes: HermesStatus
   conversation: ConversationRow[]
+  voice: VoiceStatus
 }
 
 export const defaultCharacter: CharacterState = {
@@ -42,6 +51,7 @@ export const defaultCharacter: CharacterState = {
 export const initialState: State = {
   connected: false, devices: {}, metrics: {}, approvals: [], activity: [], character: defaultCharacter,
   hermes: { reachable: null, busy: false, tool: null }, conversation: [],
+  voice: { tts: 'none', stt: 'none', language: 'tr', transcript: null, error: null },
 }
 
 const CONVERSATION_CAP = 100
@@ -76,8 +86,15 @@ export function reduce(s: State, e: Event): State {
         ...s, connected: true, devices, approvals: (p.approvals as Approval[]) ?? [],
         character: (p.character as CharacterState) ?? s.character,
         hermes: p.hermes ? { ...s.hermes, reachable: !!p.hermes.reachable, endpoint: p.hermes.endpoint } : s.hermes,
+        voice: p.voice ? { ...s.voice, tts: String(p.voice.tts), stt: String(p.voice.stt), language: String(p.voice.language ?? s.voice.language) } : s.voice,
       }
     }
+
+    // ---------------------------------------------------------------- voice
+    case 'voice.transcript':
+      return { ...s, voice: { ...s.voice, transcript: String(p.text ?? ''), error: null } }
+    case 'voice.error':
+      return { ...s, voice: { ...s.voice, error: String(p.error ?? 'ses hatası') } }
 
     // ---------------------------------------------------------------- hermes
     case 'hermes.thinking':

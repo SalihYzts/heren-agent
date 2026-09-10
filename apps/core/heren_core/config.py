@@ -56,9 +56,12 @@ class Settings(BaseModel):
     mcp_key: str = "change-me-mcp"  # Hermes → /mcp bearer (separate from api_key)
     mcp_allowed_hosts: list[str] = Field(default_factory=list)  # e.g. ["127.0.0.1:8700"]; empty = any
 
-    # voice
+    # voice — provider name + free-form options (e.g. tts_options: {model: data/voices/x.onnx})
     stt_provider: str = "none"
+    stt_options: dict[str, Any] = Field(default_factory=dict)
     tts_provider: str = "none"
+    tts_options: dict[str, Any] = Field(default_factory=dict)
+    voice_max_clips: int = 64
 
     @classmethod
     def load(cls, path: str | os.PathLike[str] | None = None) -> Settings:

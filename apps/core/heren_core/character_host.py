@@ -52,6 +52,8 @@ class CharacterHost:
         "device.offline": "device_offline",
         "ui.approval.needed": "approval_needed",
         "ui.approval.resolved": "approval_resolved",
+        "voice.playback.started": "speech_started",
+        "voice.playback.finished": "speech_finished",
     }
 
     def attach(self) -> None:

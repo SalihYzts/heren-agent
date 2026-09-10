@@ -50,10 +50,17 @@ async def main():
             await js(f"sessionStorage.setItem('heren.api_key', {json.dumps(KEY)})")
             await send("Page.navigate", url=BASE + "/"); await asyncio.sleep(1.0)
             check(await wait_for("!!document.querySelector('[data-testid=conversation]')"), "conversation panel renders")
+            # voice bar + instrument Audio playback (headless has no output device, but play()/ended fire)
+            check(await wait_for("!!document.querySelector('[data-testid=voicebar]')"), "voice bar renders")
+            await js("""(() => { window.__audio = []; const P = HTMLMediaElement.prototype.play;
+                HTMLMediaElement.prototype.play = function() { window.__audio.push({src: this.src.slice(0, 5), t: performance.now()}); return P.call(this) };
+                window.__vstat = []; const el = document.querySelector('[data-testid=voice-status]');
+                new MutationObserver(() => window.__vstat.push(el.textContent)).observe(el, { childList: true, characterData: true, subtree: true }); })()""")
             check(await wait_for("document.querySelector('[data-testid=hermes-status]').textContent.includes('hazır')", 10), "status shows hermes ready")
             # record every activity the character passes through (MutationObserver beats polling)
             await js("""(() => { window.__acts = []; const el = document.querySelector('[data-testid=ascii-frame]');
-                const mo = new MutationObserver(() => window.__acts.push(el.dataset.activity));
+                window.__acts_t = [];
+                const mo = new MutationObserver(() => { window.__acts.push(el.dataset.activity); window.__acts_t.push({a: el.dataset.activity, t: performance.now()}) });
                 mo.observe(el, { attributes: true, attributeFilter: ['data-activity'] }); })()""")
             await set_input(".conv-input input", "dev-local bilgisayarımın anlık yükünü (get_metrics) device_action ile oku ve söyle")
             await js("document.querySelector('.conv-input button').click()")
@@ -72,6 +79,15 @@ async def main():
             print("   answer:", ans[:160])
             check(len(ans) > 10, "answer has content")
             check(await wait_for("document.querySelector('[data-testid=ascii-frame]').dataset.activity === 'idle'", 15), "character back to idle")
+            # speech playback: at least one clip played through <audio>, status went 'konuşuyor' and back
+            check(await wait_for("window.__audio.length >= 1", 20), "a synthesized clip was handed to <audio>.play()")
+            check(await wait_for("document.querySelector('[data-testid=voice-status]').dataset.speaking === '0'", 40), "playback finished (status back to quiet)")
+            vs = await js("JSON.stringify(window.__vstat)"); na = await js("window.__audio.length")
+            print("   voice status trail:", vs, "clips played:", na)
+            check("konuşuyor" in vs, "voice bar showed 'konuşuyor' during playback")
+            # the character must not drop to idle before the audio ended: idle transition after last play()
+            idle_after_audio = await js("(() => { const a = window.__audio.at(-1)?.t ?? 0; return (window.__acts_t ?? []).some(x => x.a === 'idle' && x.t > a) })()")
+            check(idle_after_audio, "character went idle only after audio playback started (follows the audio, not the run)")
             await shot("12-hermes-answer")
             check(not console, "no console errors")
     finally:

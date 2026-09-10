@@ -90,6 +90,15 @@ describe('store reducer', () => {
     expect(s.character.activity).toBe('idle')
   })
 
+  it('tracks voice providers from the snapshot and speaking state from voice events', () => {
+    let s = reduce(initialState, ev('ui.snapshot', { devices: [], approvals: [], voice: { tts: 'piper', stt: 'faster_whisper', language: 'tr' } }))
+    expect(s.voice).toEqual({ tts: 'piper', stt: 'faster_whisper', language: 'tr', transcript: null, error: null })
+    s = reduce(s, ev('voice.transcript', { text: 'sunucu nasıl', confidence: 0.9 }))
+    expect(s.voice.transcript).toBe('sunucu nasıl')
+    s = reduce(s, ev('voice.error', { error: 'engine died', text: 'x' }))
+    expect(s.voice.error).toBe('engine died')
+  })
+
   it('hermes lifecycle builds the conversation: thinking → text sentences → done', () => {
     let s = reduce(initialState, ev('hermes.thinking', { input: 'sunucu nasıl?' }))
     expect(s.hermes.busy).toBe(true)
