@@ -134,6 +134,11 @@ def create_app(settings: Settings) -> FastAPI:
 
     app = FastAPI(title="nero-core", lifespan=lifespan)
     app.state.core = core
+    if settings.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
+                           allow_methods=["*"], allow_headers=["*"])
 
     def auth(request: Request) -> None:
         header = request.headers.get("authorization", "")
@@ -171,6 +176,10 @@ def create_app(settings: Settings) -> FastAPI:
         res = await svc().submit(req)
         code = 202 if res.status == ActionStatus.AWAITING_APPROVAL else 200
         return JSONResponse(res.model_dump(), status_code=code)
+
+    @app.get("/api/actions", dependencies=[Depends(auth)])
+    async def list_actions(limit: int = 50) -> list[dict[str, Any]]:
+        return [r.model_dump() | {"risk": r.risk} for r in await core.store.list_actions(limit=limit)]
 
     @app.get("/api/actions/{request_id}", dependencies=[Depends(auth)])
     async def get_action(request_id: str) -> dict[str, Any]:
@@ -232,6 +241,12 @@ def create_app(settings: Settings) -> FastAPI:
                 queue.put_nowait(e)
 
         unsub = core.bus.subscribe("*", on_event)
+        # initial snapshot so a (re)connecting UI never starts from a blank state
+        snapshot = Event(type="ui.snapshot", payload={
+            "devices": [d.model_dump() for d in await core.store.list_devices()],
+            "approvals": [r.model_dump() | {"risk": r.risk} for r in await svc().list_pending_approvals()],
+        })
+        await ws.send_json(snapshot.model_dump())
 
         async def pump() -> None:
             while True:
@@ -254,5 +269,23 @@ def create_app(settings: Settings) -> FastAPI:
             for t in (pump_task, watch_task):
                 with contextlib.suppress(BaseException):
                     await t
+
+    if settings.ui_dir and settings.ui_dir.is_dir():
+        from fastapi.responses import FileResponse
+        from fastapi.staticfiles import StaticFiles
+
+        ui_dir = settings.ui_dir
+        assets = ui_dir / "assets"
+        if assets.is_dir():
+            app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def spa(path: str) -> FileResponse:
+            if path.startswith(("api/", "ws/")):
+                raise HTTPException(404)
+            candidate = (ui_dir / path).resolve()
+            if path and candidate.is_file() and ui_dir.resolve() in candidate.parents:
+                return FileResponse(candidate)
+            return FileResponse(ui_dir / "index.html")
 
     return app

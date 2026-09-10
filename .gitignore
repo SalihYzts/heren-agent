@@ -11,3 +11,4 @@ dist/
 .env
 data/
 agents/device-agent/dist/
+apps/ui/dist/

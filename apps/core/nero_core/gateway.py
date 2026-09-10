@@ -166,10 +166,17 @@ class DeviceGateway:
                 await self._reject(s, f"invalid hello: {e}")
                 return
             await self.store.upsert_device(known)
-            await self.bus.emit("device.paired", device_id=device_id, name=known.name)
+            await self.bus.emit("device.paired", device_id=device_id, name=known.name,
+                                platform=known.platform, capabilities=known.capabilities)
         elif known.public_key != public_key:
             await self._reject(s, "public key does not match registered device key")
             return
+        else:
+            # known device reconnecting: refresh what it advertises (agent upgrade may add actions)
+            caps = list(h.get("capabilities", known.capabilities))
+            if caps != known.capabilities or h.get("name", known.name) != known.name:
+                known = known.model_copy(update={"capabilities": caps, "name": h.get("name", known.name)})
+                await self.store.upsert_device(known)
 
         # replace any stale session for this device
         old_sid = self._by_device.get(device_id)
@@ -185,7 +192,8 @@ class DeviceGateway:
         await self.store.set_device_status(device_id, DeviceStatus.ONLINE, last_seen=s.last_seen)
         await s.conn.send_json({"type": "welcome", "core_public_key": self.core_key.public_key_hex,
                                 "heartbeat_interval_s": max(1.0, self.heartbeat_timeout_s / 3)})
-        await self.bus.emit("device.online", device_id=device_id, platform=known.platform)
+        await self.bus.emit("device.online", device_id=device_id, name=known.name,
+                            platform=known.platform, capabilities=known.capabilities)
 
     async def _reject(self, s: Session, reason: str) -> None:
         await s.conn.close(4003, reason)

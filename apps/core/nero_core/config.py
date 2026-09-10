@@ -19,6 +19,8 @@ class Settings(BaseModel):
     api_key: str = "change-me"
     db_path: Path = Path("data/nero.db")
     core_seed_hex: str | None = None  # ed25519 seed; generated + persisted if None
+    ui_dir: Path | None = None  # built UI (apps/ui/dist); served at / when set
+    cors_origins: list[str] = Field(default_factory=list)  # dev UI origins, e.g. http://localhost:5173
 
     # actions / permissions
     approval_ttl_s: float = 60.0
@@ -50,8 +52,9 @@ class Settings(BaseModel):
         cfg = Path(path or os.environ.get("NERO_CONFIG", "nero.yaml"))
         if cfg.exists():
             data.update(yaml.safe_load(cfg.read_text()) or {})
-        for name in cls.model_fields:
+        for name, field in cls.model_fields.items():
             env = os.environ.get(f"NERO_{name.upper()}")
             if env is not None:
-                data[name] = env
+                ann = str(field.annotation)
+                data[name] = [s.strip() for s in env.split(",") if s.strip()] if "list" in ann else env
         return cls.model_validate(data)

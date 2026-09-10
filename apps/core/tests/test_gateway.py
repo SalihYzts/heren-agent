@@ -85,6 +85,11 @@ async def test_pairing_code_registers_device_and_marks_online(gw):
     assert d is not None and d.public_key == a.kp.public_key_hex
     assert d.status == DeviceStatus.ONLINE
     assert gw.is_online("dev-1")
+    online = next(p for t, p in gw._events if t == "device.online")
+    assert online["name"] == "PC" and online["platform"] == "linux"
+    assert online["capabilities"] == ["get_status", "shutdown"]
+    paired = next(p for t, p in gw._events if t == "device.paired")
+    assert paired["capabilities"] == ["get_status", "shutdown"]
     assert ("device.online", {"device_id": "dev-1"}) in [(t, {"device_id": p.get("device_id")}) for t, p in gw._events]
     welcome = await a.conn.sent.get()
     assert welcome["type"] == "welcome" and welcome["core_public_key"] == gw.core_key.public_key_hex
