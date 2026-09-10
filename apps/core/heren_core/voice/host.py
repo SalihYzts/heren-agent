@@ -105,7 +105,8 @@ class VoiceHost:
                 continue  # dropped by interrupt
             try:
                 st = self.character_state() or {}
-                prosody = prosody_for(str(st.get("mood", "neutral")), float(st.get("energy", 1.0)))
+                base = float(getattr(self.tts, "pitch_semitones", 0.0) or 0.0)   # voice's configured base pitch
+                prosody = prosody_for(str(st.get("mood", "neutral")), float(st.get("energy", 1.0)), base_pitch=base)
                 clip = await asyncio.to_thread(self.tts.synthesize, job.text, prosody)
             except Exception as ex:
                 log.exception("tts failed")

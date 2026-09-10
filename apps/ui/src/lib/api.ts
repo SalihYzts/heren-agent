@@ -46,7 +46,7 @@ export class Api {
       method: 'POST', headers: { Authorization: `Bearer ${this.key}`, 'Content-Type': 'audio/wav' }, body: wav,
     })
     if (!r.ok) throw new ApiError(r.status, r.statusText)
-    return r.json() as Promise<{ text: string; asked: boolean; confidence: number | null }>
+    return r.json() as Promise<{ text: string; asked: boolean; confidence: number | null; ask?: { ok: boolean; text: string; error: string | null } }>
   }
   /** Authenticated fetch of a synthesized clip (for <audio> playback via blob URL). */
   clip = async (url: string) => {

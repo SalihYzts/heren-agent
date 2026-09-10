@@ -114,3 +114,47 @@ def test_health_reports_hermes_reachability(settings):
     with TestClient(app) as client:
         r = client.get("/api/state", headers=H)
         assert r.json()["hermes"]["reachable"] is False
+
+
+def test_ask_passes_dashboard_context_to_hermes(settings, monkeypatch):
+    """Hermes must know which devices exist and what the panel just did, so 'that button
+    failed, why?' is answerable. We intercept the bridge and inspect the kwargs it gets."""
+    from heren_core import hermes_bridge as hb
+    app = create_app(settings)
+    captured = {}
+
+    async def fake_ask(self, text, character=None, context=None, model=None, provider=None):
+        captured.update(text=text, context=context)
+        return hb.AskResult(ok=True, text="tamam")
+    monkeypatch.setattr(hb.HermesBridge, "ask", fake_ask)
+    with TestClient(app) as client:
+        core = app.state.core
+        from heren_core.protocol import Device
+        client.portal.call(core.store.upsert_device, Device(device_id="dev-1", name="Salon PC", platform="linux",
+                                                            public_key="pk", capabilities=["lock"]))
+        client.portal.call(lambda: core.store.audit("r1", "dev-1", "lock", risk="medium", approved_by=None,
+                                                    result="device_offline", duration_ms=None, error="agent offline"))
+        r = client.post("/api/ask", headers=H, json={"text": "şu tuş çalışmıyor niye"})
+        assert r.status_code == 200 and r.json()["ok"]
+    ctx = captured["context"]
+    assert ctx["app"]["name"] == "Heren"
+    assert [d["device_id"] for d in ctx["devices"]] == ["dev-1"]
+    assert ctx["recent_actions"][0]["action"] == "lock"
+    assert ctx["recent_actions"][0]["result"] == "device_offline"
+
+
+def test_ask_and_transcribe_accept_a_model_choice(settings, monkeypatch):
+    from heren_core import hermes_bridge as hb
+    app = create_app(settings)
+    seen = []
+
+    async def fake_ask(self, text, character=None, context=None, model=None, provider=None):
+        seen.append((text, model, provider))
+        return hb.AskResult(ok=True, text="tamam")
+    monkeypatch.setattr(hb.HermesBridge, "ask", fake_ask)
+    with TestClient(app) as client:
+        r = client.post("/api/ask", headers=H, json={"text": "selam", "model": "gpt-4.1", "provider": "copilot"})
+        assert r.status_code == 200
+        r = client.post("/api/ask", headers=H, json={"text": "selam"})
+        assert r.status_code == 200
+    assert seen == [("selam", "gpt-4.1", "copilot"), ("selam", None, None)]

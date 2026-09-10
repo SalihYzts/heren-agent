@@ -58,13 +58,32 @@ class AskResult:
 
 
 INSTRUCTIONS_TEMPLATE = (
-    "You are Heren, the living assistant character of a home server. Answer in {language}. "
+    "You are Heren, the living assistant character of a home server; the user is talking to you through Heren, "
+    "the server's control panel app (web UI on phone/tablet). When they say 'the button', 'this app', "
+    "'the screen' or 'you', they mean Heren and its dashboard — not Hermes, not a terminal. Answer in {language}. "
     "Current time {time}. Your presentation state: activity={activity}, mood={mood}, energy={energy:.2f}. "
     "Let the mood colour tone and length only; never change facts, results or errors. "
     "To control computers use ONLY the device_list / device_status / device_action tools; "
     "never use terminal or ssh for device control. High-risk actions require the user's approval "
-    "in the dashboard — say so and wait, do not retry."
+    "in the dashboard — say so and wait, do not retry.{context}"
 )
+
+
+def context_block(context: dict[str, Any] | None) -> str:
+    """Render dashboard context (devices, recent actions) as a short instructions tail."""
+    if not context:
+        return ""
+    lines: list[str] = []
+    devices = context.get("devices") or []
+    if devices:
+        lines.append("Devices paired to this panel: " + "; ".join(
+            f"{d.get('name', d.get('device_id'))} ({d.get('device_id')}): {d.get('status', '?')}" for d in devices))
+    recent = context.get("recent_actions") or []
+    if recent:
+        lines.append("Most recent dashboard actions (newest first): " + "; ".join(
+            f"{a.get('action')} on {a.get('device_id')} → {a.get('result') or a.get('status')}"
+            + (f" ({a['error']})" if a.get("error") else "") for a in recent))
+    return (" " + " ".join(lines)) if lines else ""
 
 
 class HermesBridge:
@@ -84,11 +103,12 @@ class HermesBridge:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key or ''}"}
 
-    def instructions(self, character: dict[str, Any] | None) -> str:
+    def instructions(self, character: dict[str, Any] | None, context: dict[str, Any] | None = None) -> str:
         c = dict(character or {})
         c.setdefault("time", time.strftime("%H:%M"))
         c.setdefault("activity", "idle"); c.setdefault("mood", "neutral"); c.setdefault("energy", 1.0)
-        return INSTRUCTIONS_TEMPLATE.format(language=self.language, **c)
+        c = {k: v for k, v in c.items() if k in ("time", "activity", "mood", "energy")}
+        return INSTRUCTIONS_TEMPLATE.format(language=self.language, context=context_block(context), **c)
 
     async def healthy(self) -> bool:
         try:
@@ -105,19 +125,26 @@ class HermesBridge:
 
     # ------------------------------------------------------------ main entry
 
-    async def ask(self, text: str, character: dict[str, Any] | None = None) -> AskResult:
+    async def ask(self, text: str, character: dict[str, Any] | None = None,
+                  context: dict[str, Any] | None = None,
+                  model: str | None = None, provider: str | None = None) -> AskResult:
+        """model/provider: per-request override (Hermes honours them on /v1/runs); None = gateway default."""
         async with self._lock:  # one run per session at a time
-            return await self._ask(text, character)
+            return await self._ask(text, character, context, model, provider)
 
-    async def _ask(self, text: str, character: dict[str, Any] | None) -> AskResult:
+    async def _ask(self, text: str, character: dict[str, Any] | None, context: dict[str, Any] | None,
+                   model: str | None, provider: str | None) -> AskResult:
         await self.bus.emit("hermes.thinking", input=text)
         run_id: str | None = None
+        body: dict[str, Any] = {"input": text, "session_id": self.session_id,
+                                "instructions": self.instructions(character, context)}
+        if model:
+            body["model"] = model
+        if provider:
+            body["provider"] = provider
         try:
             async with self.client_factory() as c:
-                r = await c.post("/v1/runs", headers=self._headers(), json={
-                    "input": text, "session_id": self.session_id,
-                    "instructions": self.instructions(character),
-                })
+                r = await c.post("/v1/runs", headers=self._headers(), json=body)
                 if r.status_code not in (200, 202):
                     return await self._fail(f"hermes /v1/runs → {r.status_code}: {r.text[:200]}")
                 run_id = r.json()["run_id"]

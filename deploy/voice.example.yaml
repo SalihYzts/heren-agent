@@ -1,0 +1,11 @@
+# Voice providers for heren-core (HEREN_CONFIG=deploy/voice.example.yaml)
+# Both providers fall back to `none` (silent) if the model is missing — the app keeps working text-only.
+tts_provider: piper
+tts_options:
+  model: data/voices/tr_TR-dfki-medium.onnx     # scripts/fetch_voices.sh downloads this
+  pitch_semitones: 4    # +4 st ≈ younger voice (0 = the model as-is); mood offsets stack on this
+stt_provider: faster_whisper
+stt_options:
+  model: small          # first start downloads the model (~2 min)
+  device: cpu
+  compute_type: int8

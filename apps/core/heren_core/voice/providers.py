@@ -22,6 +22,7 @@ log = logging.getLogger("heren.voice")
 class Prosody:
     length_scale: float = 1.0  # >1 slower, <1 faster
     noise_scale: float | None = None
+    pitch_semitones: float = 0.0  # applied after synthesis (dsp.pitch_shift); + = higher/younger
 
 
 @dataclass(frozen=True)
@@ -48,18 +49,21 @@ class STTProvider(Protocol):
     def transcribe(self, wav: bytes, language: str) -> Transcript: ...
 
 
-def prosody_for(mood: str, energy: float) -> Prosody:
-    """Mood/energy → speech rate. Deterministic; facts are untouched (only pace changes)."""
+def prosody_for(mood: str, energy: float, base_pitch: float = 0.0) -> Prosody:
+    """Mood/energy → pace (+ pitch around `base_pitch`). Deterministic; facts are untouched."""
     scale = 1.0
+    pitch = base_pitch
     if mood == "sleepy":
         scale = 1.25 + (1.0 - max(0.0, min(1.0, energy))) * 0.2
+        pitch -= 1.0                       # voice sags a little when sleepy
     elif mood == "happy":
         scale = 0.95
+        pitch += 0.5
     elif mood == "annoyed":
         scale = 0.98
     elif energy < 0.35:
         scale = 1.15
-    return Prosody(length_scale=round(scale, 3))
+    return Prosody(length_scale=round(scale, 3), pitch_semitones=round(pitch, 2))
 
 
 # ----------------------------------------------------------------- null
@@ -101,11 +105,12 @@ class NullSTT:
 class PiperTTS:
     name = "piper"
 
-    def __init__(self, model: str, **_: Any) -> None:
+    def __init__(self, model: str, pitch_semitones: float = 0.0, **_: Any) -> None:
         from piper import PiperVoice  # local import: optional dependency
 
         self._voice = PiperVoice.load(model)
         self.rate = self._voice.config.sample_rate
+        self.pitch_semitones = float(pitch_semitones)  # base pitch for this voice (config); prosody adds to it
 
     def synthesize(self, text: str, prosody: Prosody) -> AudioClip:
         from piper import SynthesisConfig
@@ -116,9 +121,24 @@ class PiperTTS:
         with wave.open(buf, "wb") as w:
             self._voice.synthesize_wav(text, w, syn_config=cfg)
         data = buf.getvalue()
+        data = self._apply_pitch(data, prosody.pitch_semitones)
         with wave.open(io.BytesIO(data)) as w:
             dur = w.getnframes() / w.getframerate()
         return AudioClip(data, self.rate, dur)
+
+    def _apply_pitch(self, data: bytes, semitones: float) -> bytes:
+        """prosody.pitch_semitones already includes the base pitch when built via prosody_for(base_pitch=…);
+        when a caller passes a bare Prosody() we still honour the configured base."""
+        st = semitones if semitones else self.pitch_semitones
+        if abs(st) < 1e-6:
+            return data
+        import numpy as np
+        from heren_core.voice.dsp import pitch_shift
+        with wave.open(io.BytesIO(data)) as w:
+            rate = w.getframerate()
+            x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+        y = pitch_shift(x, rate, st)
+        return _wav_bytes((np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes(), rate)
 
 
 # ----------------------------------------------------------------- faster-whisper

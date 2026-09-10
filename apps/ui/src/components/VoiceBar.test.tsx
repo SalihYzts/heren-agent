@@ -5,11 +5,30 @@ import { VoiceBar } from './VoiceBar'
 const voice = { tts: 'piper', stt: 'faster_whisper', language: 'tr', transcript: null, error: null }
 
 describe('VoiceBar', () => {
-  it('shows providers and a quiet state', () => {
+  it('invites the user in the quiet state and keeps provider names behind details', () => {
     render(<VoiceBar voice={voice} speaking={false} queued={0} recorder={null} onStop={() => {}} />)
-    expect(screen.getByTestId('voice-status')).toHaveTextContent('sessiz')
+    expect(screen.getByTestId('voice-status')).toHaveTextContent('Heren’e dokun, konuşalım')
     expect(screen.getByText(/piper/)).toBeInTheDocument()
     expect(screen.getByText(/faster_whisper/)).toBeInTheDocument()
+  })
+
+  it('gives clear listening feedback with a live level meter while recording', () => {
+    const recorder = { start: vi.fn(), stop: vi.fn(), active: true, level: 0.6 }
+    render(<VoiceBar voice={voice} speaking={false} queued={0} recorder={recorder} onStop={() => {}} />)
+    const status = screen.getByTestId('voice-status')
+    expect(status).toHaveTextContent('Seni dinliyorum')
+    expect(status).toHaveAttribute('data-listening', 'true')
+    expect(status).toHaveAttribute('aria-live', 'polite')
+    expect(screen.getByRole('meter', { name: 'Mikrofon ses seviyesi' })).toHaveValue(0.6)
+  })
+
+  it('lets the user cancel while the permission prompt is pending and shows recorder errors', () => {
+    const recorder = { start: vi.fn(), stop: vi.fn(), active: false, pending: true, error: 'Mikrofon izni verilmedi.' }
+    render(<VoiceBar voice={voice} speaking={false} queued={0} recorder={recorder} onStop={() => {}} />)
+    expect(screen.getByTestId('voice-status')).toHaveTextContent('Mikrofon izni bekleniyor')
+    fireEvent.click(screen.getByRole('button', { name: 'İptal et' }))
+    expect(recorder.stop).toHaveBeenCalledOnce()
+    expect(screen.getByRole('alert')).toHaveTextContent('Mikrofon izni verilmedi.')
   })
 
   it('shows speaking with queue depth and a stop button that calls back', () => {
@@ -27,14 +46,21 @@ describe('VoiceBar', () => {
     expect(mic).toHaveAttribute('title', expect.stringMatching(/mikrofon/i))
   })
 
-  it('push-to-talk: press starts, release stops the recorder', () => {
+  it('starts only on click and sends only on a second click', () => {
     const recorder = { start: vi.fn(), stop: vi.fn(), active: false }
-    render(<VoiceBar voice={voice} speaking={false} queued={0} recorder={recorder} onStop={() => {}} />)
-    const mic = screen.getByRole('button', { name: /konuş/i })
+    const { rerender } = render(<VoiceBar voice={voice} speaking={false} queued={0} recorder={recorder} onStop={() => {}} />)
+    const mic = screen.getByRole('button', { name: 'Konuşmaya başla' })
     fireEvent.pointerDown(mic)
-    expect(recorder.start).toHaveBeenCalled()
-    fireEvent.pointerUp(mic)
-    expect(recorder.stop).toHaveBeenCalled()
+    expect(recorder.start).not.toHaveBeenCalled()
+    fireEvent.click(mic)
+    expect(recorder.start).toHaveBeenCalledOnce()
+    rerender(<VoiceBar voice={voice} speaking={false} queued={0} recorder={{ ...recorder, active: true }} onStop={() => {}} />)
+    const send = screen.getByRole('button', { name: 'Bitir ve gönder' })
+    expect(send).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.pointerLeave(send)
+    expect(recorder.stop).not.toHaveBeenCalled()
+    fireEvent.click(send)
+    expect(recorder.stop).toHaveBeenCalledOnce()
   })
 
   it('shows the last transcript and errors', () => {

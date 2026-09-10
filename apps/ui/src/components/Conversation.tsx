@@ -21,28 +21,33 @@ export function Conversation({ rows, hermes, onAsk }: Props) {
     setText('')
   }
 
-  const status = hermes.reachable === false ? 'hermes erişilemez'
-    : hermes.busy ? (hermes.tool ? `çalışıyor: ${hermes.tool}` : 'düşünüyor…')
-    : hermes.reachable ? 'hermes hazır' : 'hermes ?'
+  // Never leak tool identifiers to the screen; the user cares that Heren is doing something, not which tool.
+  const status = hermes.reachable === false ? 'Heren’in beyni erişilemez'
+    : hermes.busy ? (hermes.tool ? 'İşlem yapıyor…' : 'Düşünüyor…')
+    : hermes.reachable ? 'Hazır' : 'Bağlanıyor…'
 
   return (
-    <div className="panel conversation" data-testid="conversation">
-      <div className="panel-h">Konuşma<span className="count" data-testid="hermes-status">{status}</span></div>
+    <div className="conversation" data-testid="conversation">
       <div className="conv-rows">
-        {rows.length === 0 && <div className="empty">Heren'e bir şey sor</div>}
+        {rows.length === 0 && (
+          <div className="conv-empty">
+            <p>Ne yapmak istersin?</p>
+            <small>“Sunucu nasıl?” · “PC’yi kilitle” · “Şu tuş neden çalışmadı?”</small>
+          </div>
+        )}
         {rows.map(r => (
           <div className={`conv-row ${r.role}`} key={r.id}>
-            <span className="mute mono">{hhmm(r.ts)}</span>
-            <span className="who mono">{r.role === 'user' ? 'sen' : r.role === 'heren' ? 'heren' : 'hata'}</span>
+            <span className="who">{r.role === 'user' ? 'Sen' : r.role === 'heren' ? 'Heren' : 'Hata'}<span className="mute"> {hhmm(r.ts)}</span></span>
             <span className="text">{r.text}</span>
           </div>
         ))}
         <div ref={endRef} />
       </div>
       <form className="conv-input" onSubmit={e => { e.preventDefault(); submit() }}>
-        <input className="input" value={text} onChange={e => setText(e.target.value)}
-          placeholder={hermes.busy ? 'bekle…' : 'sunucu nasıl? / PC\'yi kilitle'} disabled={hermes.busy} />
-        <button className="btn primary" type="submit" disabled={hermes.busy || !text.trim()}>Sor</button>
+        <input className="input" aria-label="Heren'e mesaj" value={text} onChange={e => setText(e.target.value)}
+          placeholder={hermes.busy ? 'Heren meşgul…' : 'Yaz ya da Heren’e dokunup konuş'} disabled={hermes.busy} />
+        <button className="btn primary" type="submit" disabled={hermes.busy || !text.trim()}>Gönder</button>
+        <span className="conv-status" data-testid="hermes-status">{status}</span>
       </form>
     </div>
   )

@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Real browser microphone pipeline with a generated WAV as Chromium's test mic.
+
+No mocked STT/LLM/TTS responses. Requires running Heren + Hermes and local voice models.
+The input device is synthetic, not the user's physical microphone.
+Usage: python scripts/ui_voice_redesign_e2e.py BASE TEST_KEY [CDP_PORT]
+"""
+import asyncio
+import base64
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+import wave
+
+import numpy as np
+from piper import PiperVoice
+import websockets
+
+ROOT = Path(__file__).resolve().parents[3]
+BASE, KEY = sys.argv[1:3]
+PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 9336
+CHROME = Path.home() / '.cache/ms-playwright/chromium-1243/chrome-linux64/chrome'
+OUT = Path('/tmp/heren-redesign-e2e')
+OUT.mkdir(exist_ok=True)
+checks = []
+
+
+def check(ok, label):
+    checks.append({'ok': bool(ok), 'label': label})
+    print(('PASS ' if ok else 'FAIL ') + label, flush=True)
+    if not ok:
+        raise AssertionError(label)
+
+
+def make_question(path):
+    voice = PiperVoice.load(str(ROOT / 'data/voices/tr_TR-dfki-medium.onnx'))
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wav:
+        voice.synthesize_wav('Merhaba Heren. Sen kimsin? Bir cümleyle anlat.', wav)
+    with wave.open(io.BytesIO(buf.getvalue())) as wav:
+        rate = wav.getframerate()
+        x = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16)
+    samples = np.interp(np.arange(int(len(x) * 48000 / rate)) * rate / 48000, np.arange(len(x)), x)
+    # Leading/trailing silence avoids device startup cutting the first word.
+    audio = np.concatenate([np.zeros(24000), samples, np.zeros(24000)]).astype('<i2')
+    with wave.open(str(path), 'wb') as wav:
+        wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(48000)
+        wav.writeframes(audio.tobytes())
+    return len(audio) / 48000
+
+
+async def main():
+    mic = OUT / 'question.wav'
+    duration = make_question(mic)
+    with tempfile.TemporaryDirectory(prefix='heren-browser-', ignore_cleanup_errors=True) as profile:  # chromium may still be flushing
+        proc = subprocess.Popen([
+            str(CHROME), '--headless=new', '--no-sandbox', '--disable-gpu',
+            f'--remote-debugging-port={PORT}', f'--user-data-dir={profile}',
+            '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
+            f'--use-file-for-fake-audio-capture={mic}', 'about:blank',
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            tabs = None
+            for _ in range(50):
+                try:
+                    with urllib.request.urlopen(f'http://127.0.0.1:{PORT}/json', timeout=1) as r:
+                        tabs = json.load(r)
+                    break
+                except OSError:
+                    await asyncio.sleep(.2)
+            if tabs is None:
+                raise RuntimeError('Chromium did not start')
+            page = next(t for t in tabs if t['type'] == 'page')
+            async with websockets.connect(page['webSocketDebuggerUrl'], max_size=2**26) as ws:
+                serial = 0
+                exceptions = []
+
+                async def send(method, **params):
+                    nonlocal serial
+                    serial += 1
+                    await ws.send(json.dumps({'id': serial, 'method': method, 'params': params}))
+                    while True:
+                        message = json.loads(await ws.recv())
+                        if message.get('method') == 'Runtime.exceptionThrown':
+                            d = message['params']['exceptionDetails']
+                            exceptions.append((d.get('text') or '') + ' ' + str((d.get('exception') or {}).get('description', ''))[:300])
+                        if message.get('id') == serial:
+                            if 'error' in message:
+                                raise RuntimeError(message['error'])
+                            return message.get('result', {})
+
+                async def js(expression):
+                    result = await send('Runtime.evaluate', expression=expression, returnByValue=True, awaitPromise=True)
+                    if 'exceptionDetails' in result:
+                        raise RuntimeError(result['exceptionDetails'])
+                    return result['result'].get('value')
+
+                async def wait(expression, timeout=15):
+                    deadline = time.monotonic() + timeout
+                    while time.monotonic() < deadline:
+                        if await js(expression):
+                            return True
+                        await asyncio.sleep(.2)
+                    return False
+
+                async def click(label):
+                    check(await js(f"(() => {{ const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === {json.dumps(label)}); if (!b || b.disabled) return false; b.click(); return true }})()"), 'click ' + label)
+
+                async def shot(name):
+                    r = await send('Page.captureScreenshot', format='png')
+                    path = OUT / f'{name}.png'
+                    path.write_bytes(base64.b64decode(r['data']))
+                    print('SCREENSHOT ' + str(path), flush=True)
+
+                await send('Runtime.enable')
+                await send('Page.enable')
+                await send('Emulation.setDeviceMetricsOverride', width=1440, height=960, deviceScaleFactor=1, mobile=False)
+                await send('Page.navigate', url=BASE)
+                check(await wait("location.origin !== 'null' && document.readyState === 'complete'"), 'app loaded')
+                await js(f"sessionStorage.setItem('heren.api_key', {json.dumps(KEY)})")
+                await send('Page.addScriptToEvaluateOnNewDocument', source="""
+                    window.__plays = []; window.__ended = 0; window.__micTracks = [];
+                    const play = HTMLMediaElement.prototype.play;
+                    HTMLMediaElement.prototype.play = function() {
+                      window.__plays.push(this.src); this.addEventListener('ended', () => window.__ended++, {once:true});
+                      return play.call(this);
+                    };
+                    const get = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+                    navigator.mediaDevices.getUserMedia = async (...args) => {
+                      const stream = await get(...args); window.__micTracks.push(...stream.getTracks()); return stream;
+                    };
+                """)
+                await send('Page.navigate', url=BASE)
+                check(await wait("!!document.querySelector('[data-testid=conversation]')"), 'conversation on the home screen')
+                check(await wait("document.querySelector('[data-testid=character-panel]')?.dataset.pack === '/character/heren.json'"), 'real character art loaded')
+                # two halves
+                check(await js("!!document.querySelector('section[aria-label=Heren]') && !!document.querySelector('section[aria-label=Kumanda]')"), 'screen split: Heren half + control half')
+                heren = json.loads(await js("JSON.stringify(document.querySelector('section[aria-label=Heren]').getBoundingClientRect())"))
+                ctl = json.loads(await js("JSON.stringify(document.querySelector('section[aria-label=Kumanda]').getBoundingClientRect())"))
+                check(heren['right'] <= ctl['left'] + 1 and heren['width'] > 300 and ctl['width'] > 300, f"halves side by side on tablet/desktop ({heren['width']:.0f}px | {ctl['width']:.0f}px)")
+                # categories on the control half
+                check(await js("!!document.querySelector('section[aria-label^=\"Sunucu\"]')"), 'category 1: server buttons')
+                check(await js("!!document.querySelector('section[aria-label^=\"Diğer cihazlar\"]')"), 'category 2: other devices')
+                check(await js("!!document.querySelector('section[aria-label=\"Senin düğmelerin\"]')"), 'category 3: user-assignable buttons')
+                check(await wait("document.querySelectorAll('section[aria-label^=\"Sunucu\"] button.ctl').length >= 5"), 'server buttons rendered from the paired device')
+                labels = await js("[...document.querySelectorAll('section[aria-label^=\"Sunucu\"] button.ctl')].map(b => b.getAttribute('aria-label'))")
+                print('SERVER BUTTONS ' + json.dumps(labels, ensure_ascii=False), flush=True)
+                check('Durumu göster' in labels and 'Yeniden başlat' in labels and 'Kapat' in labels, 'server essentials present (status/restart/shutdown…)')
+                check(await js("!document.querySelector('.devices') && !document.querySelector('.log-row') && !document.body.innerText.includes('faster_whisper') || !!document.querySelector('.voice-details')"), 'no technical noise on the home screen')
+                await shot('01-home-tablet')
+                # nav: devices / logs / settings, then back
+                await click('Cihazlar'); check(await wait("!!document.querySelector('.devices')"), 'devices view reachable')
+                await click('Kayıtlar'); check(await wait("[...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Denetim')"), 'logs view reachable')
+                await click('Ayarlar'); check(await wait("!!document.querySelector('section[aria-label=Ayarlar]')"), 'settings view reachable')
+                check(await js("(() => { const r = [...document.querySelectorAll('input[name=theme]')]; return r.length >= 3 && !!document.querySelector('input[name=look]') })()"), 'settings: theme radios + character look')
+                await js("[...document.querySelectorAll('input[name=theme]')].find(r => r.value === 'paper').click()")
+                check(await wait("document.documentElement.dataset.theme === 'paper' && getComputedStyle(document.body).backgroundColor !== 'rgb(10, 10, 10)'"), 'theme switch repaints immediately')
+                await shot('02-settings-paper')
+                await js("[...document.querySelectorAll('input[name=theme]')].find(r => r.value === 'nothing').click()")
+                await click('Ana ekran')
+                urllib.request.urlopen(urllib.request.Request(BASE + '/api/voice/stop', method='POST', headers={'Authorization': 'Bearer ' + KEY}), timeout=5).read()  # quiet leftovers from earlier runs
+                # listen to the core bus in parallel: proves the browser really played (voice.playback.* come FROM the browser)
+                bus = []
+                async def listen():
+                    async with websockets.connect(BASE.replace('http', 'ws') + '/ws/events?token=' + KEY) as w:
+                        async for m in w: bus.append(json.loads(m)['type'])
+                bus_task = asyncio.create_task(listen()); await asyncio.sleep(.3)
+                # tap Heren → mic opens, screen says it is listening
+                check(await wait("[...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Konuşmaya başla' && !b.disabled)"), 'microphone available')
+                await js("document.querySelector('[data-testid=character-stage]').click()")
+                check(await wait("document.querySelector('[data-testid=character-caption]')?.textContent === 'Seni dinliyorum'"), 'tap on Heren → "Seni dinliyorum" on the character')
+                check(await js("document.querySelector('[data-testid=voice-status]').dataset.listening === 'true' && !!document.querySelector('.listen-ring') && !!document.querySelector('meter')"), 'listening feedback: ring on stage + status + level meter')
+                check(await wait("document.querySelector('[data-testid=ascii-frame]').dataset.anim === 'listening'"), 'character switches to the notice (listening) art')
+                await asyncio.sleep(1.0)
+                lvl = await js("+document.querySelector('meter').value")
+                print(f'MIC LEVEL {lvl:.3f}', flush=True)
+                check(lvl > 0.01, 'level meter reacts to real microphone input')
+                await shot('03-listening')
+                await asyncio.sleep(max(0, duration - 1.0))
+                await js("document.querySelector('[data-testid=character-stage]').click()")   # tap again = send
+                check(await wait("document.querySelector('[data-testid=voice-status]')?.dataset.listening === 'false' && !document.querySelector('meter') && !document.querySelector('.listen-ring')"), 'second tap ends listening (ring + meter gone)')
+                tracks = await js("JSON.stringify((window.__micTracks || []).map(t => t.readyState))")
+                print('MIC tracks after send: ' + str(tracks), flush=True)
+                if tracks != '[]':
+                    check(await wait("window.__micTracks.every(t => t.readyState === 'ended')"), 'microphone tracks released after send')
+                check(await wait("document.querySelector('[data-testid=voice-transcript]')?.textContent.toLocaleLowerCase('tr').includes('kimsin')", 180), 'real STT understood microphone input')
+                check(await wait("!!document.querySelector('.conv-row.heren .text')", 180), 'real Hermes response in conversation')
+                print('ANSWER ' + str(await js("document.querySelector('.conv-row.heren .text').textContent")), flush=True)
+                answer = await js("document.querySelector('.conv-row.heren .text').textContent")
+                check('heren' in answer.lower() and len(answer) > 20, 'Hermes answered as Heren (knows who it is through the panel)')
+                # The app reports playback to core only when <audio> really starts/ends (useVoice → api.playback).
+                # That trail is the truth; the HTMLMediaElement.play hook is informational (may miss with fake audio).
+                print('AUDIO play() hook calls: ' + str(await js('window.__plays.length')), flush=True)
+                # Playback finished = the app's own signal (voice status leaves 'konuşuyor'), which fires on
+                # <audio> ended/pause. window.__ended is informational: headless Chromium with a fake audio
+                # device may never fire 'ended'.
+                deadline = time.monotonic() + 120
+                while time.monotonic() < deadline and 'voice.playback.finished' not in bus: await asyncio.sleep(.2)
+                print('BUS ' + json.dumps([t for t in bus if t.startswith('voice.')]), flush=True)
+                check('voice.speech' in bus, 'core synthesized the answer (voice.speech on the bus)')
+                check('voice.playback.started' in bus, 'browser reported playback started (its <audio> really played)')
+                check('voice.playback.finished' in bus, 'browser reported playback finished')
+                check(await wait("document.querySelector('[data-testid=voice-status]').dataset.speaking === '0'", 10), 'voice bar back to quiet after playback')
+                bus_task.cancel()
+                print('AUDIO ended events: ' + str(await js('window.__ended')), flush=True)
+                await shot('04-answer')
+                await send('Emulation.setDeviceMetricsOverride', width=390, height=844, deviceScaleFactor=1, mobile=True)
+                await asyncio.sleep(.5)
+                check(await js('document.documentElement.scrollWidth <= innerWidth'), 'mobile has no horizontal page overflow')
+                # halves must stack without painting over each other: control half starts where the Heren half ends
+                geo = json.loads(await js("(() => { const a = document.querySelector('.half-heren').getBoundingClientRect(), b = document.querySelector('.half-control').getBoundingClientRect(), s = document.querySelector('.half-heren').scrollHeight; return JSON.stringify({aTop: a.top, aBottom: a.bottom, aScroll: s, bTop: b.top}) })()"))
+                print('MOBILE geometry ' + json.dumps(geo), flush=True)
+                check(geo['bTop'] >= geo['aBottom'] - 1 and geo['aBottom'] - geo['aTop'] >= geo['aScroll'] - 1, 'mobile: halves stacked, Heren half not clipped/overlapped by controls')
+                await shot('04-mobile')
+                print('EXC ' + json.dumps(exceptions, ensure_ascii=False), flush=True)
+                check(not exceptions, 'no uncaught browser exceptions')
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill(); proc.wait()
+
+
+try:
+    asyncio.run(main())
+finally:
+    (OUT / 'checks.json').write_text(json.dumps(checks, ensure_ascii=False, indent=2))
+print(f'RESULT: {len(checks)} checks passed')

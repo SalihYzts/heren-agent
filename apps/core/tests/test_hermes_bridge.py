@@ -103,6 +103,21 @@ async def test_request_carries_input_session_and_character_instructions(bridge, 
     assert body["session_id"] == "heren-main"
     assert "sleepy" in body["instructions"] and "00:43" in body["instructions"]
     assert "device_action" in body["instructions"]  # tells hermes how to control devices
+    assert "Heren" in body["instructions"] and "device_list" in body["instructions"]
+
+
+async def test_ask_instructions_carry_dashboard_context_and_identity(bridge, hermes):
+    hermes.script = [{"event": "run.completed", "output": "ok", "usage": {}}]
+    await bridge.ask("şu tuş çalışmıyor niye", character={"activity": "idle"},
+                     context={"app": {"name": "Heren", "role": "control panel"},
+                              "devices": [{"device_id": "dev-local", "name": "DEV PC", "status": "offline"}],
+                              "recent_actions": [{"action": "lock", "device_id": "dev-local", "result": "device_offline"}]})
+    body = hermes.requests[0]
+    text = body["instructions"]
+    assert "the user is talking to you through Heren" in text
+    assert "'the button', 'this app'" in text and "they mean Heren" in text
+    assert "DEV PC (dev-local): offline" in text
+    assert "lock on dev-local → device_offline" in text
 
 
 async def test_tool_failure_emits_tool_failed(bridge, hermes):
@@ -181,3 +196,13 @@ def test_sentence_splitter_handles_turkish_and_abbreviations():
         out += done
     out += [buf] if buf.strip() else []
     assert out == ["Merhaba!", "Nasılsın?", "Dr. Ali geldi.", "Saat 10.30'da bitti"]
+
+
+async def test_ask_forwards_model_and_provider_choice_per_request(bridge, hermes):
+    hermes.script = [{"event": "run.completed", "output": "ok", "usage": {}}]
+    await bridge.ask("selam", model="gpt-4.1", provider="copilot")
+    body = hermes.requests[0]
+    assert body["model"] == "gpt-4.1" and body["provider"] == "copilot"
+    hermes.script = [{"event": "run.completed", "output": "ok", "usage": {}}]
+    await bridge.ask("selam")           # no choice → gateway default, keys absent (not null)
+    assert "model" not in hermes.requests[1] and "provider" not in hermes.requests[1]

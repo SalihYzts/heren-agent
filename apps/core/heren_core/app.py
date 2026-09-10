@@ -128,6 +128,8 @@ class PlaybackIn(BaseModel):
 
 class AskIn(BaseModel):
     text: str
+    model: str | None = None      # per-request Hermes model override (None = gateway default)
+    provider: str | None = None
 
 
 class ActionIn(BaseModel):
@@ -309,15 +311,21 @@ def create_app(settings: Settings) -> FastAPI:
     async def state() -> dict[str, Any]:
         return await _snapshot()
 
-    async def _ask(text: str) -> dict[str, Any]:
+    async def _ask(text: str, model: str | None = None, provider: str | None = None) -> dict[str, Any]:
         assert core.hermes and core.character
         char = core.character.snapshot() | {"time": time.strftime("%H:%M")}
-        res = await core.hermes.ask(text, character=char)
+        # Dashboard context: what Hermes needs to understand "that button", "this app".
+        devices = [{"device_id": d.device_id, "name": d.name, "status": d.status}
+                   for d in await core.store.list_devices()]
+        recent = [{"action": a["action"], "device_id": a["device_id"], "result": a["result"], "error": a["error"]}
+                  for a in await core.store.list_audit(limit=5)]
+        context = {"app": {"name": "Heren", "role": "control panel"}, "devices": devices, "recent_actions": recent}
+        res = await core.hermes.ask(text, character=char, context=context, model=model, provider=provider)
         return {"ok": res.ok, "text": res.text, "error": res.error, "run_id": res.run_id}
 
     @app.post("/api/ask", dependencies=[Depends(auth)])
     async def ask(body: AskIn) -> dict[str, Any]:
-        return await _ask(body.text)
+        return await _ask(body.text, body.model, body.provider)
 
     # ---- voice -------------------------------------------------------------
 
@@ -329,7 +337,8 @@ def create_app(settings: Settings) -> FastAPI:
         return Response(clip.wav, media_type="audio/wav", headers={"Cache-Control": "private, max-age=600"})
 
     @app.post("/api/voice/transcribe", dependencies=[Depends(auth)])
-    async def voice_transcribe(request: Request, ask: bool = False) -> dict[str, Any]:
+    async def voice_transcribe(request: Request, ask: bool = False,
+                               model: str | None = None, provider: str | None = None) -> dict[str, Any]:
         assert core.voice
         wav = await request.body()
         if not wav.startswith(b"RIFF"):
@@ -338,7 +347,7 @@ def create_app(settings: Settings) -> FastAPI:
         out: dict[str, Any] = {"text": t.text, "language": t.language, "confidence": t.confidence, "asked": False}
         if ask and t.text.strip():
             out["asked"] = True
-            out["ask"] = await _ask(t.text)
+            out["ask"] = await _ask(t.text, model, provider)
         return out
 
     @app.post("/api/voice/stop", dependencies=[Depends(auth)])
