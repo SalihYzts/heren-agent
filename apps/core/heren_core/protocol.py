@@ -37,6 +37,18 @@ BUILTIN_ACTION_RISK: dict[str, RiskLevel] = {
     "shutdown": RiskLevel.HIGH,
     "restart": RiskLevel.HIGH,
     "set_next_boot": RiskLevel.HIGH,
+    # server management (phase 9): reads are LOW, service/container control MEDIUM (audited, automatic)
+    "list_services": RiskLevel.LOW,
+    "service_logs": RiskLevel.LOW,
+    "system_logs": RiskLevel.LOW,
+    "list_containers": RiskLevel.LOW,
+    "start_service": RiskLevel.MEDIUM,
+    "stop_service": RiskLevel.MEDIUM,
+    "enable_service": RiskLevel.MEDIUM,
+    "disable_service": RiskLevel.MEDIUM,
+    "start_container": RiskLevel.MEDIUM,
+    "stop_container": RiskLevel.MEDIUM,
+    "restart_container": RiskLevel.MEDIUM,
 }
 
 

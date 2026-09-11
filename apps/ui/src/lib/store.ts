@@ -90,6 +90,7 @@ export function reduce(s: State, e: Event): State {
         hermes: p.hermes ? { ...s.hermes, reachable: !!p.hermes.reachable, endpoint: p.hermes.endpoint } : s.hermes,
         voice: p.voice ? { ...s.voice, tts: String(p.voice.tts), stt: String(p.voice.stt), language: String(p.voice.language ?? s.voice.language) } : s.voice,
         access: p.access ? { urls: Array.isArray(p.access.urls) ? p.access.urls.map(String) : [], tls: !!p.access.tls } : s.access,
+        metrics: p.metrics && typeof p.metrics === 'object' ? { ...s.metrics, ...(p.metrics as Record<string, Metrics>) } : s.metrics,
       }
     }
 
@@ -145,9 +146,10 @@ export function reduce(s: State, e: Event): State {
       return setDevice({ ...s, connected: true }, p.device_id, { status: 'offline' })
 
     case 'device.metrics': {
-      const { device_id, ...rest } = p
+      const { device_id, metrics, ...rest } = p
+      const sample = (metrics && typeof metrics === 'object' ? metrics : rest) as Metrics   // core sends {metrics:{…}}; older agents sent flat
       const next = setDevice({ ...s, connected: true }, device_id, { last_seen: e.ts, status: 'online' })
-      return { ...next, metrics: { ...s.metrics, [device_id]: { ...rest, ts: e.ts } } }
+      return { ...next, metrics: { ...s.metrics, [device_id]: { ...sample, ts: e.ts } } }
     }
 
     case 'ui.approval.needed': {

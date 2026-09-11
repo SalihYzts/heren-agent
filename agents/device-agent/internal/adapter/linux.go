@@ -16,6 +16,7 @@ type Linux struct {
 	run      Runner
 	approved ApprovedCommands
 	readFile func(path string) (string, error)
+	prevCPU  *cpuSample // last /proc/stat sample for cpu_pct deltas
 }
 
 func NewLinux(run Runner, approved ApprovedCommands) *Linux {
@@ -28,8 +29,8 @@ func NewLinux(run Runner, approved ApprovedCommands) *Linux {
 func (l *Linux) Platform() string { return "linux" }
 
 func (l *Linux) Capabilities() []string {
-	return []string{"get_status", "get_metrics", "get_boot_entries", "lock", "launch_app", "stop_app",
-		"restart_service", "run_approved_command", "sleep", "shutdown", "restart", "set_next_boot"}
+	return append([]string{"get_status", "get_metrics", "get_boot_entries", "lock", "launch_app", "stop_app",
+		"restart_service", "run_approved_command", "sleep", "shutdown", "restart", "set_next_boot"}, serverCapabilities...)
 }
 
 // systemd unit / executable names: no path separators, no shell metacharacters.
@@ -40,7 +41,7 @@ func (l *Linux) Run(ctx context.Context, action string, params map[string]any) R
 	case "get_status":
 		return l.status(ctx)
 	case "get_metrics":
-		return l.metrics()
+		return l.metrics(ctx)
 	case "get_boot_entries":
 		entries, backend, err := l.bootEntries(ctx)
 		if err != nil {
@@ -86,6 +87,9 @@ func (l *Linux) Run(ctx context.Context, action string, params map[string]any) R
 	case "set_next_boot":
 		return l.setNextBoot(ctx, params)
 	}
+	if r, ok := l.runServer(ctx, action, params); ok {
+		return r
+	}
 	return Failf("unsupported action: " + action)
 }
 
@@ -110,7 +114,7 @@ func (l *Linux) status(ctx context.Context) Result {
 	return OK(out)
 }
 
-func (l *Linux) metrics() Result {
+func (l *Linux) metrics(ctx context.Context) Result {
 	out := map[string]any{}
 	if la, err := l.readFile("/proc/loadavg"); err == nil {
 		f := strings.Fields(la)
@@ -120,7 +124,7 @@ func (l *Linux) metrics() Result {
 		}
 	}
 	if mi, err := l.readFile("/proc/meminfo"); err == nil {
-		var total, avail float64
+		var total, avail, swapTotal, swapFree float64
 		for _, line := range strings.Split(mi, "\n") {
 			f := strings.Fields(line)
 			if len(f) < 2 {
@@ -132,12 +136,44 @@ func (l *Linux) metrics() Result {
 				total = v
 			case "MemAvailable:":
 				avail = v
+			case "SwapTotal:":
+				swapTotal = v
+			case "SwapFree:":
+				swapFree = v
 			}
 		}
 		if total > 0 {
 			out["ram_total_mb"] = int(total / 1024)
 			out["ram_pct"] = int((total - avail) * 100 / total)
 		}
+		if swapTotal > 0 {
+			out["swap_pct"] = int((swapTotal - swapFree) * 100 / swapTotal)
+		}
+	}
+	if up, err := l.readFile("/proc/uptime"); err == nil {
+		if f, err := strconv.ParseFloat(strings.Fields(up)[0], 64); err == nil {
+			out["uptime_s"] = int(f)
+		}
+	}
+	if pct, ok := l.cpuPct(); ok {
+		out["cpu_pct"] = pct
+	}
+	if t, ok := l.tempC(); ok {
+		out["temp_c"] = t
+	}
+	if disks := l.disks(ctx); len(disks) > 0 {
+		worst := 0
+		for _, d := range disks {
+			if p := d["pct"].(int); p > worst {
+				worst = p
+			}
+		}
+		out["disks"] = disks
+		out["disk_pct"] = worst
+	}
+	if rx, tx, ok := l.netTotals(); ok {
+		out["net_rx_bytes"] = rx
+		out["net_tx_bytes"] = tx
 	}
 	return OK(out)
 }

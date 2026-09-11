@@ -41,6 +41,7 @@ from heren_core.actions import ActionService, ApprovalNotFound
 from heren_core.bus import EventBus
 from heren_core.character_host import CharacterHost
 from heren_core.config import Settings
+from heren_core.metrics import MetricsCollector
 from heren_core.netaccess import access_urls, agent_urls, cert_path, ensure_self_signed
 from heren_core.gateway import DeviceGateway
 from heren_core.hermes_bridge import HermesBridge
@@ -65,6 +66,7 @@ class Core:
         self.gateway: DeviceGateway | None = None
         self.actions: ActionService | None = None
         self.character: CharacterHost | None = None
+        self.metrics: MetricsCollector | None = None
         self.hermes: HermesBridge | None = None
         self.voice: VoiceHost | None = None
         self.mcp_app: Any = None
@@ -84,6 +86,8 @@ class Core:
                                      pairing_code_ttl_s=s.pairing_code_ttl_s)
         self.actions = ActionService(store=self.store, bus=self.bus, dispatcher=self.gateway,
                                      approval_ttl_s=s.approval_ttl_s, critical_enabled=s.critical_enabled)
+        self.metrics = MetricsCollector(store=self.store, bus=self.bus, dispatcher=self.gateway,
+                                        interval_s=s.metrics_interval_s, keep_s=s.metrics_keep_s)
         async def _save_character(d: dict[str, Any]) -> None:
             await self.store.set_setting("character_state", json.dumps(d))
 
@@ -107,6 +111,7 @@ class Core:
                                language=s.language, max_clips=s.voice_max_clips)
         self.voice.attach()
         self._tasks.append(asyncio.create_task(self._housekeeping()))
+        self._tasks.append(asyncio.create_task(self.metrics.run()))
 
     async def stop(self) -> None:
         if self.voice:
@@ -357,6 +362,7 @@ def create_app(settings: Settings) -> FastAPI:
             "voice": {"tts": core.voice.tts.name if core.voice else "none",
                       "stt": core.voice.stt.name if core.voice else "none", "language": settings.language},
             "access": {"urls": access_urls(settings), "tls": settings.tls},
+            "metrics": await core.metrics.latest() if core.metrics else {},
         }
 
     @app.get("/api/state", dependencies=[Depends(auth)])
@@ -380,6 +386,12 @@ def create_app(settings: Settings) -> FastAPI:
 
     from heren_core.models_catalog import ModelCatalog
     catalog = ModelCatalog(settings.hermes_home, settings.hermes_root, ttl_s=settings.models_cache_s)
+
+    @app.get("/api/metrics/{device_id}", dependencies=[Depends(auth)])
+    async def metrics_history(device_id: str, since_s: float = Query(3600.0, ge=60, le=7 * 24 * 3600)) -> list[dict[str, Any]]:
+        """Numeric samples for one device, oldest first (for the sparklines)."""
+        assert core.metrics
+        return await core.metrics.history(device_id, since_s)
 
     @app.get("/api/models", dependencies=[Depends(auth)])
     async def models(refresh: bool = False) -> dict[str, Any]:

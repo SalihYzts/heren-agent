@@ -34,6 +34,8 @@ class Settings(BaseModel):
 
     # device gateway
     heartbeat_timeout_s: float = 30.0
+    metrics_interval_s: float = 30.0   # get_metrics poll on online devices; history kept metrics_keep_s
+    metrics_keep_s: float = 24 * 3600.0
     action_timeout_s: float = 30.0
     pairing_code_ttl_s: float = 300.0
 

@@ -277,3 +277,30 @@ def test_agent_binary_is_downloadable_from_the_core(settings, tmp_path):
     with TestClient(app) as client:
         r = client.get("/api/access/cert.pem", headers=H)
         assert r.status_code == 200 and b"BEGIN CERTIFICATE" in r.content
+
+
+async def test_metrics_endpoints_expose_latest_and_history(settings, monkeypatch):
+    """The core polls get_metrics through the gateway; the panel reads /api/state.metrics + /api/metrics/{id}."""
+    from heren_core.app import Core
+    from heren_core.protocol import ActionResult, ActionStatus, Device, DeviceStatus
+    core = Core(settings.model_copy(update={"metrics_interval_s": 3600}))
+    await core.start()
+    try:
+        await core.store.upsert_device(Device(device_id="srv", name="Srv", platform="linux", status=DeviceStatus.ONLINE, public_key="k", capabilities=["get_metrics"]))
+
+        async def fake_dispatch(req):
+            return ActionResult(request_id=req.request_id, status=ActionStatus.COMPLETED, output={"cpu_pct": 7, "disk_pct": 40, "disks": [{"mount": "/", "pct": 40}]})
+        monkeypatch.setattr(core.metrics.dispatcher, "dispatch", fake_dispatch)
+        await core.metrics.poll_once()
+        from httpx import ASGITransport, AsyncClient
+        from heren_core.app import create_app
+    finally:
+        await core.stop()
+    # through HTTP with a fresh app sharing the same db: history persisted
+    app = create_app(settings.model_copy(update={"metrics_interval_s": 3600}))
+    with TestClient(app) as client:
+        assert client.get("/api/metrics/srv").status_code == 401
+        rows = client.get("/api/metrics/srv?since_s=3600", headers=H).json()
+        assert rows and rows[-1]["cpu_pct"] == 7 and "disks" not in rows[-1]
+        assert client.get("/api/metrics/nobody", headers=H).json() == []
+        assert "metrics" in client.get("/api/state", headers=H).json()

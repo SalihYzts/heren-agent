@@ -82,3 +82,12 @@ def test_action_result_marks_terminal_states():
     assert fail.is_terminal
     running = ActionResult(request_id="req_x", status=ActionStatus.RUNNING)
     assert not running.is_terminal
+
+
+def test_server_actions_have_risk_levels_reads_low_writes_medium():
+    # Reading is free; touching services/containers is audited but automatic; nothing here is HIGH.
+    for a in ("list_services", "service_logs", "system_logs", "list_containers"):
+        assert risk_of(a) == RiskLevel.LOW, a
+    for a in ("start_service", "stop_service", "enable_service", "disable_service",
+              "start_container", "stop_container", "restart_container"):
+        assert risk_of(a) == RiskLevel.MEDIUM, a

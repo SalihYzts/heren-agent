@@ -22,6 +22,13 @@ export interface Metrics {
   cpu_pct?: number
   ram_pct?: number
   ram_total_mb?: number
+  swap_pct?: number
+  disk_pct?: number
+  disks?: { mount: string; device?: string; pct: number; used_gb?: number; total_gb?: number }[]
+  temp_c?: number
+  uptime_s?: number
+  net_rx_bytes?: number
+  net_tx_bytes?: number
   ts?: number
 }
 

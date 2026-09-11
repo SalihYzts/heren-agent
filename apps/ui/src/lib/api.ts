@@ -5,6 +5,8 @@ export interface ModelCatalog {
   providers: { id: string; models: string[]; error?: string }[]
 }
 
+export interface Sample { ts: number; cpu_pct?: number; ram_pct?: number; disk_pct?: number; [k: string]: number | undefined }
+
 export interface PairingInfo { code: string; ttl_s: number; agent_urls: string[]; ca_file: string | null; agent_download: string }
 
 export class ApiError extends Error {
@@ -46,6 +48,9 @@ export class Api {
     this.req<{ ok: boolean; text: string; error: string | null }>('POST', '/api/ask', {
       text, ...(choice?.model ? { model: choice.model } : {}), ...(choice?.provider ? { provider: choice.provider } : {}),
     })
+  /** Numeric samples for one device, oldest first. */
+  metricsHistory = (deviceId: string, sinceS = 3600) =>
+    this.req<Sample[]>('GET', `/api/metrics/${encodeURIComponent(deviceId)}?since_s=${sinceS}`)
   /** Providers with credentials in the Hermes install + the models each can run. */
   models = (refresh = false) =>
     this.req<ModelCatalog>('GET', `/api/models${refresh ? '?refresh=true' : ''}`)

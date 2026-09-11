@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   audit: vi.fn().mockResolvedValue([]), ask: vi.fn().mockResolvedValue({}), touch: vi.fn().mockResolvedValue({}),
   submit: vi.fn().mockResolvedValue({ status: 'completed', output: {} }),
   qr: vi.fn().mockResolvedValue(new Blob(['<svg/>'], { type: 'image/svg+xml' })),
+  metricsHistory: vi.fn().mockResolvedValue([]),
   models: vi.fn().mockResolvedValue({ default: { provider: 'copilot', model: 'gpt-4.1' }, providers: [{ id: 'copilot', models: ['gpt-4.1', 'claude-opus-5'] }, { id: 'anthropic', models: ['claude-sonnet-4-6'] }] }),
   listener: null as null | ((e: Event) => void),
 }))
@@ -15,7 +16,7 @@ const recorder = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn(), active: fals
 const speechLevels = vi.hoisted(() => ({ value: [] as number[] }))
 const speaking = vi.hoisted(() => ({ value: false }))
 vi.mock('./lib/api', () => ({
-  Api: class { approve = api.approve; deny = api.deny; audit = api.audit; ask = api.ask; touch = api.touch; submit = api.submit; qr = api.qr; models = api.models },
+  Api: class { approve = api.approve; deny = api.deny; audit = api.audit; ask = api.ask; touch = api.touch; submit = api.submit; qr = api.qr; models = api.models; metricsHistory = api.metricsHistory },
   ApiError: class extends Error {},
   connectEvents: (_key: string, listener: (e: Event) => void) => { api.listener = listener; return () => {} },
 }))
@@ -25,7 +26,7 @@ vi.mock('./character/loadPack', async importOriginal => {
   return { ...original, loadPack: vi.fn().mockImplementation(async () => ({ pack: (await import('./character/defaultPack')).defaultPack, source: 'builtin' })) }
 })
 
-beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); URL.createObjectURL = vi.fn(() => 'blob:qr'); URL.revokeObjectURL = vi.fn(); localStorage.clear(); sessionStorage.setItem('heren.api_key', 'test-key'); vi.clearAllMocks(); recorder.active = false; speaking.value = false; speechLevels.value = [] })
+beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); URL.createObjectURL = vi.fn(() => 'blob:qr'); URL.revokeObjectURL = vi.fn(); localStorage.clear(); sessionStorage.setItem('heren.api_key', 'test-key'); vi.clearAllMocks(); api.submit.mockReset().mockResolvedValue({ status: 'completed', output: {} }); api.models.mockReset().mockResolvedValue({ default: { provider: 'copilot', model: 'gpt-4.1' }, providers: [{ id: 'copilot', models: ['gpt-4.1', 'claude-opus-5'] }, { id: 'anthropic', models: ['claude-sonnet-4-6'] }] }); recorder.active = false; speaking.value = false; speechLevels.value = [] })
 const snapshot = (devices = 1) => act(() => api.listener?.({ type: 'ui.snapshot', ts: 1, payload: {
   devices: Array.from({ length: devices }, (_, i) => ({ device_id: `pc${i}`, name: i === 0 ? 'Sunucu' : `PC ${i}`, status: 'online', platform: 'linux',
     capabilities: ['get_status', 'get_metrics', 'lock', 'restart_service', 'shutdown', 'restart'], public_key: '', last_seen: null })),
@@ -180,5 +181,34 @@ describe('settings: model picker from the Hermes catalog', () => {
     const model = await screen.findByLabelText('Model')
     expect(model.tagName).toBe('INPUT')
     expect(screen.getByText(/Model listesi alınamadı/)).toBeInTheDocument()
+  })
+})
+
+describe('server vitals + services view', () => {
+  it('home shows the server vitals from the snapshot and loads history sparklines', async () => {
+    api.metricsHistory.mockResolvedValue([{ ts: 1, cpu_pct: 5, ram_pct: 40, disk_pct: 50 }, { ts: 2, cpu_pct: 9, ram_pct: 41, disk_pct: 50 }])
+    await openApp()
+    await act(async () => { api.listener?.({ type: 'ui.snapshot', ts: 3, payload: {
+      devices: [{ device_id: 'pc0', name: 'Sunucu', status: 'online', platform: 'linux', capabilities: ['get_status', 'get_metrics', 'list_services'], public_key: '', last_seen: null }],
+      approvals: [], character: { schema: 1, activity: 'idle', mood: 'neutral', attention: 'none', energy: 1 },
+      metrics: { pc0: { cpu_pct: 12, ram_pct: 59, disk_pct: 53, temp_c: 70, ts: 3 } },
+    } }) })
+    const vitals = await screen.findByLabelText('Sunucu durumu')
+    expect(within(vitals).getByLabelText('CPU')).toHaveTextContent('12%')
+    expect(within(vitals).getByLabelText('Disk')).toHaveTextContent('53%')
+    await waitFor(() => expect(api.metricsHistory).toHaveBeenCalledWith('pc0', 3600))
+    // live update through the bus
+    await act(async () => { api.listener?.({ type: 'device.metrics', ts: 4, payload: { device_id: 'pc0', metrics: { cpu_pct: 77, ram_pct: 59 } } }) })
+    expect(within(vitals).getByLabelText('CPU')).toHaveTextContent('77%')
+  })
+
+  it('has a Servisler tab that runs list_services on the server', async () => {
+    api.submit.mockImplementation(async (_d: string, action: string) => ({
+      status: 'completed', output: action === 'list_services' ? { services: [{ name: 'nginx', state: 'running', description: 'web' }], failed: 0 } : { runtime: 'none', containers: [] },
+    }))
+    await openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Servisler' }))
+    expect(await screen.findByText('nginx')).toBeInTheDocument()
+    expect(api.submit).toHaveBeenCalledWith('pc0', 'list_services', {})
   })
 })

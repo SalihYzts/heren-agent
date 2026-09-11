@@ -14,11 +14,14 @@ import { QuickActions } from './components/QuickActions'
 import { ServerControls, ACTION_LABEL } from './components/ServerControls'
 import { SettingsView } from './components/SettingsView'
 import { VoiceBar } from './components/VoiceBar'
+import { Vitals } from './components/Vitals'
+import { ServicesView } from './components/ServicesView'
+import type { Sample } from './lib/api'
 import { useVoice } from './voice/useVoice'
 import { clearSession, loadSession, saveSession } from './lib/session'
 
 const APPROVER = 'ui:dashboard'
-type View = 'home' | 'devices' | 'logs' | 'settings'
+type View = 'home' | 'services' | 'devices' | 'logs' | 'settings'
 
 export default function App() {
   const [key, setKey] = useState<string | null>(() => loadSession())
@@ -100,6 +103,21 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
   const serverId = settings.server && state.devices[settings.server] ? settings.server : paired[0]?.device_id
 
   const fetchCode = useCallback(() => api.pairingCode(), [api])
+  // server vitals history (sparklines): refetch when the server changes or a new sample lands (cheap, ≤ every 30 s)
+  const [history, setHistory] = useState<Sample[]>([])
+  const latestTs = serverId ? state.metrics[serverId]?.ts : undefined
+  useEffect(() => {
+    if (!serverId) return
+    let on = true
+    api.metricsHistory(serverId, 3600).then(h => { if (on) setHistory(h) }).catch(() => {})
+    return () => { on = false }
+  }, [api, serverId, latestTs])
+  // services view runs actions and needs their output back (not just a toast)
+  const runForOutput = useCallback(async (deviceId: string, action: string, params: Record<string, unknown>) => {
+    const res = await api.submit(deviceId, action, params)
+    if (res.status !== 'completed') throw new Error(res.error ?? res.status)
+    return res.output
+  }, [api])
   // Tapping Heren = wake/attention on the core AND open the mic (tap again to send).
   const onTouch = useCallback(() => {
     api.touch().catch(e => say(`dokunma: ${(e as Error).message}`, true))
@@ -121,7 +139,7 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
       <header className="topbar">
         <span className="brand">HEREN</span>
         <nav aria-label="Ana gezinme" className="main-nav">
-          {navBtn('home', 'Ana ekran')}{navBtn('devices', 'Cihazlar')}{navBtn('logs', 'Kayıtlar')}{navBtn('settings', 'Ayarlar')}
+          {navBtn('home', 'Ana ekran')}{navBtn('services', 'Servisler')}{navBtn('devices', 'Cihazlar')}{navBtn('logs', 'Kayıtlar')}{navBtn('settings', 'Ayarlar')}
         </nav>
         <span className="spacer" />
         <button className={`btn approval-toggle ${state.approvals.length ? 'has-items' : ''}`} aria-expanded={showApprovals}
@@ -141,10 +159,15 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
             <Conversation rows={state.conversation} hermes={state.hermes} onAsk={onAsk} />
           </section>
           <section className="half half-control" aria-label="Kumanda">
+            {serverId && <div className="server-vitals" aria-label="Sunucu durumu"><Vitals latest={state.metrics[serverId]} history={history} /></div>}
             <ServerControls devices={paired} serverId={serverId} onAction={onAction} />
             <QuickActions devices={devices} onAction={onAction} />
           </section>
         </div>
+
+        {view === 'services' && (serverId
+          ? <ServicesView deviceId={serverId} deviceName={names[serverId] ?? serverId} run={runForOutput} />
+          : <section className="inspect-view" aria-label="Servisler"><div className="empty">Önce bir sunucu eşle.</div></section>)}
 
         {view === 'devices' && <section className="inspect-view" aria-label="Cihazlar">
           <div className="section-heading"><div><span className="eyebrow">CİHAZLAR</span><h1>Cihazlar</h1></div><button className="btn" onClick={() => setPairing(true)}>+ Cihaz eşle</button></div>
