@@ -10,7 +10,7 @@ interface Props {
   devices: Device[]
   serverId?: string
   access: { urls: string[]; tls: boolean }
-  fetchQr?: (url: string) => Promise<Blob>
+  fetchQr?: (url: string, dark: string) => Promise<Blob>
   fetchModels?: (refresh: boolean) => Promise<ModelCatalog>
   onChange: (s: Settings) => void
   onLogout: () => void
@@ -22,10 +22,12 @@ export function SettingsView({ settings, devices, serverId, access, fetchQr, fet
   const first = access.urls[0]
   useEffect(() => {
     if (!first || !fetchQr) { setQr(null); return }
+    // QR modules in the theme's text colour (transparent background): visible on dark and light alike
+    const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim().replace('#', '') || '000'
     let url: string | null = null; let on = true
-    fetchQr(first).then(b => { if (!on) return; url = URL.createObjectURL(b); setQr(url) }).catch(() => setQr(null))
+    fetchQr(first, fg).then(b => { if (!on) return; url = URL.createObjectURL(b); setQr(url) }).catch(() => setQr(null))
     return () => { on = false; if (url) URL.revokeObjectURL(url) }
-  }, [first, fetchQr])
+  }, [first, fetchQr, settings.theme])
 
   return (
     <section className="inspect-view settings" aria-label="Ayarlar">

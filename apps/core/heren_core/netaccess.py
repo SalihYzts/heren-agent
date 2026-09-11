@@ -71,6 +71,23 @@ def access_urls(settings: Settings) -> list[str]:
     return urls
 
 
+def agent_urls(settings: Settings) -> list[str]:
+    """WebSocket URLs a device agent can use to reach this core (same reachability rules as access_urls)."""
+    scheme = "wss" if settings.tls else "ws"
+    if settings.host in ("127.0.0.1", "localhost", "::1"):
+        return [f"{scheme}://127.0.0.1:{settings.port}/ws/agent"]
+    urls = [f"{scheme}://{ip}:{settings.port}/ws/agent" for ip in lan_addresses()]
+    urls.append(f"{scheme}://{_hostname()}.local:{settings.port}/ws/agent")
+    return urls
+
+
+def cert_path(settings: Settings) -> Path | None:
+    """The certificate agents must pin, or None when TLS is off."""
+    if not settings.tls:
+        return None
+    return Path(settings.tls_cert) if settings.tls_cert else Path(settings.tls_dir) / "cert.pem"
+
+
 def ensure_self_signed(tls_dir: Path, days: int = 3650) -> tuple[Path, Path]:
     """Create data/tls/{cert,key}.pem once; return their paths."""
     from cryptography import x509

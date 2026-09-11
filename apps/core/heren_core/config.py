@@ -62,6 +62,7 @@ class Settings(BaseModel):
     hermes_home: Path = Path.home() / ".hermes"                 # auth.json + config.yaml (HERMES_HOME of the gateway)
     hermes_root: Path = Path.home() / ".hermes" / "hermes-agent"  # the install with venv/bin/python
     models_cache_s: float = 3600.0
+    agent_dist_dir: Path = Path(__file__).resolve().parents[3] / "agents" / "device-agent" / "dist"  # built agent binaries served to new devices
     mcp_key: str = "change-me-mcp"  # Hermes → /mcp bearer (separate from api_key)
     mcp_allowed_hosts: list[str] = Field(default_factory=list)  # e.g. ["127.0.0.1:8700"]; empty = any
 

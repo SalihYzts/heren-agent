@@ -230,3 +230,50 @@ async def test_character_state_survives_a_core_restart(settings):
         assert st["energy"] == pytest.approx(0.42, abs=0.01) and st["debt"] == 0.2
     finally:
         await core2.stop()
+
+
+def test_qr_is_drawn_in_the_requested_colour_so_dark_themes_can_see_it(settings, monkeypatch):
+    monkeypatch.setattr("heren_core.netaccess._all_ipv4", lambda: ["192.168.1.150"])
+    monkeypatch.setattr("heren_core.netaccess._hostname", lambda: "server")
+    app = create_app(settings.model_copy(update={"host": "0.0.0.0", "tls": True}))
+    with TestClient(app) as client:
+        assert 'stroke="#000"' in client.get("/api/access/qr.svg", headers=H).text            # default
+        assert 'stroke="#f2f0ea"' in client.get("/api/access/qr.svg?dark=f2f0ea", headers=H).text
+        assert client.get("/api/access/qr.svg?dark=<script>", headers=H).status_code == 422       # hex only
+
+
+def test_pairing_code_response_tells_the_agent_exactly_how_to_connect(settings, monkeypatch):
+    """The modal shows this verbatim: real scheme/host/port, and the cert to pin when TLS is on."""
+    monkeypatch.setattr("heren_core.netaccess._all_ipv4", lambda: ["192.168.1.150"])
+    monkeypatch.setattr("heren_core.netaccess._hostname", lambda: "server")
+    app = create_app(settings.model_copy(update={"host": "0.0.0.0", "tls": True, "port": 8701}))
+    with TestClient(app) as client:
+        r = client.post("/api/devices/pairing-code", headers=H).json()
+        assert r["agent_urls"] == ["wss://192.168.1.150:8701/ws/agent", "wss://server.local:8701/ws/agent"]
+        assert r["ca_file"] and r["ca_file"].endswith("cert.pem")
+        assert r["agent_download"] == "/api/agent/heren-agent-linux-amd64"
+    app = create_app(settings)   # loopback, no tls → only usable from this machine, and no ca
+    with TestClient(app) as client:
+        r = client.post("/api/devices/pairing-code", headers=H).json()
+        assert r["agent_urls"] == ["ws://127.0.0.1:8700/ws/agent"] and r["ca_file"] is None
+
+
+def test_agent_binary_is_downloadable_from_the_core(settings, tmp_path):
+    exe = tmp_path / "agent" / "heren-agent-linux-amd64"
+    exe.parent.mkdir()
+    exe.write_bytes(b"\x7fELF fake")
+    app = create_app(settings.model_copy(update={"agent_dist_dir": exe.parent}))
+    with TestClient(app) as client:
+        assert client.get("/api/agent/heren-agent-linux-amd64").status_code == 401
+        assert client.get("/api/agent/heren-agent-linux-amd64?token=wrong").status_code == 401
+        assert client.get("/api/agent/heren-agent-linux-amd64?token=test-key").status_code == 200   # <a href> download
+        r = client.get("/api/agent/heren-agent-linux-amd64", headers=H)
+        assert r.status_code == 200 and r.content == b"\x7fELF fake"
+        assert client.get("/api/agent/heren-agent-..-x", headers=H).status_code == 404   # name must match the build pattern
+        assert client.get("/api/agent/heren-agent-linux-amd64%2F..%2Fx", headers=H).status_code == 404
+        assert client.get("/api/agent/nope", headers=H).status_code == 404
+    # the served cert is the one agents must pin
+    app = create_app(settings.model_copy(update={"host": "0.0.0.0", "tls": True, "tls_dir": tmp_path / "tls"}))
+    with TestClient(app) as client:
+        r = client.get("/api/access/cert.pem", headers=H)
+        assert r.status_code == 200 and b"BEGIN CERTIFICATE" in r.content

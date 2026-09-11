@@ -5,6 +5,8 @@ export interface ModelCatalog {
   providers: { id: string; models: string[]; error?: string }[]
 }
 
+export interface PairingInfo { code: string; ttl_s: number; agent_urls: string[]; ca_file: string | null; agent_download: string }
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) { super(message); this.status = status }
@@ -12,7 +14,7 @@ export class ApiError extends Error {
 
 export class Api {
   private key: string
-  private base: string
+  readonly base: string
   constructor(key: string, base = '') { this.key = key; this.base = base }
 
   private async req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -30,7 +32,7 @@ export class Api {
   }
 
   devices = () => this.req<Device[]>('GET', '/api/devices')
-  pairingCode = () => this.req<{ code: string; ttl_s: number }>('POST', '/api/devices/pairing-code')
+  pairingCode = () => this.req<PairingInfo>('POST', '/api/devices/pairing-code')
   submit = (device_id: string, action: string, params: Record<string, unknown> = {}, requested_by = 'ui') =>
     this.req<ActionResult>('POST', '/api/actions', { device_id, action, params, requested_by })
   actions = (limit = 50) => this.req<ActionRecord[]>('GET', `/api/actions?limit=${limit}`)
@@ -48,8 +50,11 @@ export class Api {
   models = (refresh = false) =>
     this.req<ModelCatalog>('GET', `/api/models${refresh ? '?refresh=true' : ''}`)
   /** Authenticated QR (SVG) for the phone; the caller turns the blob into an object URL. */
-  qr = async (url?: string) => {
-    const r = await fetch(`${this.base}/api/access/qr.svg${url ? `?url=${encodeURIComponent(url)}` : ''}`, { headers: { Authorization: `Bearer ${this.key}` } })
+  qr = async (url?: string, dark?: string) => {
+    const q = new URLSearchParams()
+    if (url) q.set('url', url)
+    if (dark) q.set('dark', dark.replace('#', ''))
+    const r = await fetch(`${this.base}/api/access/qr.svg${q.size ? `?${q}` : ''}`, { headers: { Authorization: `Bearer ${this.key}` } })
     if (!r.ok) throw new ApiError(r.status, r.statusText)
     return r.blob()
   }

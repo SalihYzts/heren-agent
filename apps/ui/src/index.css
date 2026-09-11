@@ -302,3 +302,11 @@ label.field, .shortcut-form label { display: grid; gap: 4px; font-size: 12px; co
 .linklike:focus-visible { outline: 2px solid var(--accent); }
 .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--fg-dim); min-height: 44px; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+/* pairing modal: steps + command */
+.modal-wide { max-width: 640px; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 12px; font-size: 13px; }
+.steps li strong { display: block; margin-bottom: 4px; }
+.steps .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.steps .btn { min-height: 40px; }
+.cmd { margin: 6px 0; padding: 10px; border: 1px solid var(--line); background: var(--stage); color: var(--fg); font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all; user-select: all; }
+.steps a.btn { display: inline-flex; align-items: center; width: auto; height: auto; min-height: 40px; padding: 0 12px; text-decoration: none; }

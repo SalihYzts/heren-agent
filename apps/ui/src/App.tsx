@@ -108,7 +108,7 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
     if (r.active || r.pending) r.stop(); else r.start()
   }, [api, say, voice.recorder])
   const onAsk = useCallback((text: string) => { api.ask(text, choice).catch(e => say(`soru: ${(e as Error).message}`, true)) }, [api, say, choice])
-  const fetchQr = useCallback((u: string) => api.qr(u), [api])
+  const fetchQr = useCallback((u: string, dark: string) => api.qr(u, dark), [api])
   const fetchModels = useCallback((refresh: boolean) => api.models(refresh), [api])
 
   const listening = !!voice.recorder?.active
@@ -176,7 +176,7 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
       <footer className="statusbar" role="status">
         <span>{state.connected ? '● Sunucuya bağlı' : '○ Sunucu bağlantısı bekleniyor'}</span>
       </footer>
-      {pairing && <PairingModal fetchCode={fetchCode} onClose={() => setPairing(false)} />}
+      {pairing && <PairingModal fetchCode={fetchCode} onClose={() => setPairing(false)} apiBase={api.base} apiKey={apiKey} />}
       {toast && <div role={toast.err ? 'alert' : 'status'} className={`toast ${toast.err ? 'err' : ''}`}>{toast.text}</div>}
     </div>
   )

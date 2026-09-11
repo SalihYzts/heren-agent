@@ -123,7 +123,7 @@ describe('settings: model, phone access, feature guide', () => {
     expect(screen.getByRole('link', { name: 'https://192.168.1.5:8700' })).toBeVisible()
     expect(screen.getByText(/sertifikayı bir kez kabul/)).toBeVisible()
     expect(await screen.findByRole('img', { name: /QR/ })).toBeInTheDocument()
-    expect(api.qr).toHaveBeenCalledWith('https://192.168.1.5:8700')
+    expect(api.qr).toHaveBeenCalledWith('https://192.168.1.5:8700', expect.any(String))
   })
 
   it('has a feature guide that explains what Heren can do', async () => {

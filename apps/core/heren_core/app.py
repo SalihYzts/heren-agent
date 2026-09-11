@@ -24,14 +24,16 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import re
+from pathlib import Path
 import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status, Query
+from fastapi.responses import JSONResponse, Response, FileResponse
 from pydantic import BaseModel, ValidationError
 from starlette.types import Receive, Scope, Send
 
@@ -39,7 +41,7 @@ from heren_core.actions import ActionService, ApprovalNotFound
 from heren_core.bus import EventBus
 from heren_core.character_host import CharacterHost
 from heren_core.config import Settings
-from heren_core.netaccess import access_urls
+from heren_core.netaccess import access_urls, agent_urls, cert_path, ensure_self_signed
 from heren_core.gateway import DeviceGateway
 from heren_core.hermes_bridge import HermesBridge
 from heren_core.mcp_server import BearerGate, build_mcp_server
@@ -241,6 +243,13 @@ def create_app(settings: Settings) -> FastAPI:
         if header != f"Bearer {settings.api_key}":
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid api key")
 
+    def auth_or_token(request: Request) -> None:
+        """Downloads open from a plain <a href>: the browser cannot attach a header, so the panel key
+        may ride as ?token= (same pattern as /ws/events). Only for the two download routes."""
+        if request.query_params.get("token") == settings.api_key:
+            return
+        auth(request)
+
     def svc() -> ActionService:
         assert core.actions
         return core.actions
@@ -259,7 +268,37 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.post("/api/devices/pairing-code", dependencies=[Depends(auth)])
     async def pairing_code() -> dict[str, Any]:
-        return {"code": gw().new_pairing_code(), "ttl_s": settings.pairing_code_ttl_s}
+        """The code plus everything the pairing modal needs to print a copy-pasteable agent command."""
+        ca = cert_path(settings)
+        return {
+            "code": gw().new_pairing_code(),
+            "ttl_s": settings.pairing_code_ttl_s,
+            "agent_urls": agent_urls(settings),
+            "ca_file": str(ca.resolve()) if ca else None,
+            "agent_download": "/api/agent/heren-agent-linux-amd64",
+        }
+
+    @app.get("/api/agent/{name}", dependencies=[Depends(auth_or_token)])
+    async def agent_binary(name: str) -> Response:
+        """Serve a built device-agent binary so a new machine can fetch it from the core."""
+        if not re.fullmatch(r"heren-agent-[a-z0-9]+-[a-z0-9]+(\.exe)?", name):
+            raise HTTPException(404, "unknown agent build")
+        path = Path(settings.agent_dist_dir) / name
+        if not path.is_file():
+            raise HTTPException(404, f"{name} is not built (make agent)")
+        return FileResponse(path, media_type="application/octet-stream", filename=name)
+
+    @app.get("/api/access/cert.pem", dependencies=[Depends(auth_or_token)])
+    async def access_cert() -> Response:
+        """The self-signed certificate agents pin with --ca-file (public material)."""
+        ca = cert_path(settings)
+        if ca is None:
+            raise HTTPException(404, "tls is off")
+        if not ca.is_file() and not settings.tls_cert:
+            ensure_self_signed(Path(settings.tls_dir))   # same file __main__ serves; mint on demand
+        if not ca.is_file():
+            raise HTTPException(404, f"certificate not found: {ca}")
+        return Response(ca.read_bytes(), media_type="application/x-pem-file", headers={"Content-Disposition": 'attachment; filename="heren-cert.pem"'})
 
     @app.post("/api/actions", dependencies=[Depends(auth)])
     async def submit_action(body: ActionIn) -> JSONResponse:
@@ -325,8 +364,9 @@ def create_app(settings: Settings) -> FastAPI:
         return await _snapshot()
 
     @app.get("/api/access/qr.svg", dependencies=[Depends(auth)])
-    async def access_qr(url: str | None = None) -> Response:
-        """QR for the phone: encodes the first LAN url (or ?url=…, restricted to our own urls)."""
+    async def access_qr(url: str | None = None, dark: str = Query("000", pattern=r"^[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$")) -> Response:
+        """QR for the phone: encodes the first LAN url (or ?url=…, restricted to our own urls).
+        ?dark=<hex> = module colour so dark themes get a light QR (transparent background either way)."""
         urls = access_urls(settings)
         if not urls:
             raise HTTPException(404, "not reachable from the LAN (bound to loopback)")
@@ -334,7 +374,7 @@ def create_app(settings: Settings) -> FastAPI:
         import segno
         buf = io.BytesIO()
         # full document (xmlns + xml decl): it is served as an image, not pasted inline
-        segno.make(target, error="m").save(buf, kind="svg", scale=6, dark="#000", light=None, border=2)
+        segno.make(target, error="m").save(buf, kind="svg", scale=6, dark=f"#{dark}", light=None, border=2)
         svg = buf.getvalue()
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=60"})
 
