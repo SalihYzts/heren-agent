@@ -99,6 +99,6 @@ cihaz): **52/52, rc=0**. Mikrofon yolu `worklet`; katalog 28 copilot modeli; ell
 gönder 4.3 s (klip 4.2 s); dalgalar 50/50 ve 48.8/50; yakalanmamış istisna 0.
 
 ## Kalanlar
-- Uyandırma kelimesi yok. Wake-on-LAN yok. Gerçek Windows doğrulaması yok. Metrik geçmişi yok.
+- Uyandırma kelimesi yok. Wake-on-LAN yok. Metrik geçmişi yok. (Windows kapsam dışı — kullanıcı kararı.)
 - Gerçek telefon donanımıyla kullanıcı testi (sertifika kabul akışı tarayıcıya göre değişir).
 - Tek komutla kurulum betiği.

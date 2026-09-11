@@ -74,8 +74,7 @@ export function PairingModal({ fetchCode, onClose, apiBase, apiKey }: Props) {
                 </div>
               </li>
               <li className="dim" style={{ fontSize: 12 }}>
-                Windows: aynı komut, dosya adı <span className="mono">heren-agent-windows-amd64.exe</span> (derlenmişse <span className="mono">/api/agent/…</span> altında).
-                Kalıcı çalışması için <span className="mono">deploy/</span> altındaki servis örneğine bak.
+                Kalıcı çalışması için <span className="mono">deploy/</span> altındaki systemd servis örneğine bak.
               </li>
             </ol>
           )}

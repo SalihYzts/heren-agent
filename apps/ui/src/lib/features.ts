@@ -7,7 +7,7 @@ export const FEATURES: Feature[] = [
   { title: 'Konuş', body: 'Heren’e dokun, konuş, tekrar dokun (ya da sus, kendisi gönderir). Söylediğin yazıya çevrilir, Hermes cevaplar, Heren sesli okur. Konuşurken kesmek için tekrar dokun.' },
   { title: 'Yaz', body: 'Alttaki kutuya yaz. “Sunucu nasıl?”, “PC’yi kilitle”, “Şu tuş neden çalışmadı?” — Heren hangi cihazların bağlı olduğunu ve az önce ne yaptığını bilir.' },
   { title: 'Sunucu düğmeleri', body: 'Kumanda yarısında 01 / SUNUCU: durum, kaynaklar, kilit, uyku, yeniden başlat, kapat, sonraki açılış. Düğmeler cihazın gerçekten yapabildiklerinden üretilir; yapamadığı şey görünmez.' },
-  { title: 'Diğer cihazlar', body: '02 / DİĞER CİHAZLAR: sunucuya eşlediğin her bilgisayar (Linux ve Windows) burada kendi düğmeleriyle listelenir. Eşleme: Cihazlar → Cihaz eşle → koddaki ajanı o makinede çalıştır.' },
+  { title: 'Diğer cihazlar', body: '02 / DİĞER CİHAZLAR: sunucuya eşlediğin her Linux makine burada kendi düğmeleriyle listelenir. Eşleme: Cihazlar → Cihaz eşle → koddaki ajanı o makinede çalıştır.' },
   { title: 'Senin düğmelerin', body: '03: kendi kısayolların. Bir cihaz + bir işlem (+ gerekiyorsa servis/uygulama adı) seç, adını ver. Bu tarayıcıda saklanır; düzenlenebilir, silinebilir.' },
   { title: 'Onay', body: 'Tehlikeli işlemler (kapat, yeniden başlat, uyut, sonraki açılış) hemen çalışmaz: sağ üstte “Onaylar” sayacı artar, sen onaylarsın. Hermes kendi isteğini onaylayamaz.' },
   { title: 'Karakter', body: 'Heren dinlerken, düşünürken, iş yaparken ve konuşurken farklı görünür. Gece 23:00’ten sonra uyumaya başlar; uyandırırsan uykulu konuşur. Gece çok çalıştırırsan sabah da uykulu olur.' },

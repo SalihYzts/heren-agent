@@ -20,7 +20,7 @@ a tap-to-approve gate.
 - **One-tap controls.** Status, metrics, lock, sleep, restart, shutdown, next-boot entry — generated from
   what each paired device actually declares. Three groups: 01 the server, 02 other paired machines,
   03 your own buttons (service restarts, app launches — stored in the browser).
-- **Other machines.** A small Go agent runs on each computer (Linux/Windows), connects *outbound* to the
+- **Other machines.** A small Go agent runs on each Linux machine, connects *outbound* to the
   core, signs every message (ed25519 + nonce), and only runs what it declared it can run.
 - **Safety by design.** LOW-risk actions run immediately, HIGH-risk ones wait for approval in the UI,
   CRITICAL ones are off by default. Hermes cannot approve its own requests. No SSH keys on the Hermes host.
@@ -44,7 +44,7 @@ phone / tablet browser ──▶ heren-core (FastAPI, :8700) ──▶ Hermes ga
 - `apps/core` — Python 3.12 core: event bus, character engine, Hermes bridge, MCP server, action/permission
   service, voice host, SQLite storage.
 - `apps/ui` — React + TypeScript + Vite. ASCII character renderer, voice bar, control panel, settings.
-- `agents/device-agent` — Go device agent (Linux + Windows adapters).
+- `agents/device-agent` — Go device agent (Linux adapter; a Windows adapter exists but is untested and out of scope).
 - `packages/protocol` — shared protocol vectors.
 - `assets/character` — ASCII frames + `pack.yaml` (built into `apps/ui/public/character/heren.json`).
 - `docs/` — one report per phase, with screenshots and the live e2e evidence.
@@ -110,8 +110,8 @@ Live end-to-end scripts (need a running core + Hermes + a Chromium): `apps/core/
 
 ## Roadmap / known gaps
 
-See the phase reports in `docs/`. Open items: wake word (tap-to-talk only for now), Wake-on-LAN, real
-Windows validation, metric history, a one-command installer.
+See the phase reports in `docs/`. Open items: wake word (tap-to-talk only for now), Wake-on-LAN, metric
+history, a one-command installer. Windows is out of scope for now.
 
 ## License
 
