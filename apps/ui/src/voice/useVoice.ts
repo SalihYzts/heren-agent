@@ -7,6 +7,7 @@ import type { Recorder } from '../components/VoiceBar'
 import { SpeechQueue, audioPlayer, type SpeechState } from './speechQueue'
 import { encodeWav } from './wav'
 import { SilenceDetector } from './silence'
+import { openCapture, type Capture } from './micCapture'
 
 const STT_RATE = 16000
 const WAVE_LEN = 48                       // samples kept for the waveform ring
@@ -22,7 +23,7 @@ export function micErrorMessage(e: unknown): string {
   return `Mikrofon açılamadı: ${(e as Error)?.message ?? 'bilinmeyen hata'}`
 }
 
-interface Media { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; chunks: Float32Array[]; silence: SilenceDetector }
+interface Media { ctx: AudioContext; stream: MediaStream; capture: Capture; chunks: Float32Array[]; silence: SilenceDetector }
 
 export function useVoice(api: Api, onTranscribed?: (text: string) => void, choice?: { model?: string; provider?: string }) {
   const [speech, setSpeech] = useState<SpeechState>({ speaking: false, queued: 0 })
@@ -56,8 +57,7 @@ export function useVoice(api: Api, onTranscribed?: (text: string) => void, choic
 
   const release = useCallback((m: Media | null) => {
     if (!m) return
-    m.node.onaudioprocess = null
-    m.node.disconnect(); m.stream.getTracks().forEach(t => t.stop())
+    m.capture.close(); m.stream.getTracks().forEach(t => t.stop())
     void m.ctx.close().catch(() => {})
   }, [])
 
@@ -72,12 +72,9 @@ export function useVoice(api: Api, onTranscribed?: (text: string) => void, choic
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
       if (token !== generation.current) { stream.getTracks().forEach(t => t.stop()); return }  // cancelled meanwhile
       const ctx = new AudioContext()
-      const src = ctx.createMediaStreamSource(stream)
-      const node = ctx.createScriptProcessor(4096, 1, 1)
       const chunks: Float32Array[] = []
       const silence = new SilenceDetector(SILENCE)
-      node.onaudioprocess = ev => {
-        const buf = new Float32Array(ev.inputBuffer.getChannelData(0))
+      const capture = await openCapture(ctx, stream, buf => {
         chunks.push(buf)
         let sum = 0
         for (let i = 0; i < buf.length; i += 16) sum += buf[i] * buf[i]
@@ -87,9 +84,9 @@ export function useVoice(api: Api, onTranscribed?: (text: string) => void, choic
         const verdict = silence.feed(lvl, performance.now())
         if (verdict === 'send') stopRef.current()
         else if (verdict === 'timeout') { setError('Ses duyamadım. Heren’e dokunup tekrar dene.'); stopRef.current() }
-      }
-      src.connect(node); node.connect(ctx.destination)
-      media.current = { ctx, stream, node, chunks, silence }
+      })
+      if (token !== generation.current) { capture.close(); stream.getTracks().forEach(t => t.stop()); void ctx.close().catch(() => {}); return }
+      media.current = { ctx, stream, capture, chunks, silence }
       setActive(true)
     } catch (e) {
       setError(micErrorMessage(e))

@@ -1,5 +1,10 @@
 import type { ActionRecord, ActionResult, AuditRow, CharacterState, Device } from './types'
 
+export interface ModelCatalog {
+  default: { provider: string | null; model: string | null }
+  providers: { id: string; models: string[]; error?: string }[]
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) { super(message); this.status = status }
@@ -39,6 +44,9 @@ export class Api {
     this.req<{ ok: boolean; text: string; error: string | null }>('POST', '/api/ask', {
       text, ...(choice?.model ? { model: choice.model } : {}), ...(choice?.provider ? { provider: choice.provider } : {}),
     })
+  /** Providers with credentials in the Hermes install + the models each can run. */
+  models = (refresh = false) =>
+    this.req<ModelCatalog>('GET', `/api/models${refresh ? '?refresh=true' : ''}`)
   /** Authenticated QR (SVG) for the phone; the caller turns the blob into an object URL. */
   qr = async (url?: string) => {
     const r = await fetch(`${this.base}/api/access/qr.svg${url ? `?url=${encodeURIComponent(url)}` : ''}`, { headers: { Authorization: `Bearer ${this.key}` } })

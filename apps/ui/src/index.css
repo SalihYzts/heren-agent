@@ -295,3 +295,10 @@ label.field, .shortcut-form label { display: grid; gap: 4px; font-size: 12px; co
   .conv-row { grid-template-columns: 1fr; gap: 2px; }
   .inspect-view, .settings { padding: 12px; }
 }
+
+/* model picker (settings) */
+.model-picker { display: grid; gap: 8px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; min-height: 0; }
+.linklike:focus-visible { outline: 2px solid var(--accent); }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--fg-dim); min-height: 44px; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }

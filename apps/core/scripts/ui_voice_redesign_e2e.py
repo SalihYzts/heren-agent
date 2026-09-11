@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 import wave
 
@@ -144,6 +145,9 @@ async def main():
                       const d = s.querySelector('path')?.getAttribute('d') || '';
                       const ys = [...d.matchAll(/,([\\d.]+)/g)].map(m => +m[1]); if (!ys.length) continue;
                       const dev = Math.max(...ys.map(y => Math.abs(y - 50))); if (dev > window.__waveMax[tone]) window.__waveMax[tone] = dev; } }, 40);
+                    window.__micBackend = null;
+                    const AW = window.AudioWorkletNode; if (AW) { window.AudioWorkletNode = class extends AW { constructor(...a) { super(...a); window.__micBackend = 'worklet' } } }
+                    const csp = AudioContext.prototype.createScriptProcessor; AudioContext.prototype.createScriptProcessor = function(...a) { window.__micBackend = 'script-processor'; return csp.apply(this, a) };
                     const play = HTMLMediaElement.prototype.play;
                     HTMLMediaElement.prototype.play = function() {
                       window.__plays.push(this.src); this.addEventListener('ended', () => window.__ended++, {once:true});
@@ -188,9 +192,25 @@ async def main():
                 check(await wait("(() => { const i = document.querySelector('img.access-qr'); return !!i?.currentSrc && i.complete && i.naturalWidth > 0 })()"), 'settings render a QR for the phone address (image decodes)')
                 await js("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Neler yapabilir?').click()")
                 check(await wait("document.querySelectorAll('.guide-list dt').length >= 8"), 'feature guide lists what Heren can do')
-                for label, value in (('Model', 'gpt-4.1'), ('Sağlayıcı', 'copilot')):
-                    await js(f"(() => {{ const i = document.querySelector('input[aria-label={json.dumps(label)}]'); const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(i, {json.dumps(value)}); i.dispatchEvent(new Event('input', {{bubbles: true}})) }})()")
-                check(await js("JSON.parse(localStorage.getItem('heren.settings.v1') || '{}').model === 'gpt-4.1'"), 'model choice persisted in settings')
+                check(await wait("document.querySelector('select[aria-label=\"Sağlayıcı\"]') && document.querySelectorAll('select[aria-label=\"Sağlayıcı\"] option').length >= 2"), 'model picker lists providers from the Hermes install')
+                providers = await js("[...document.querySelectorAll('select[aria-label=\"Sağlayıcı\"] option')].map(o => o.value)")
+                print('PROVIDERS ' + json.dumps(providers), flush=True)
+                def set_select(label, value):
+                    return js(f"(() => {{ const i = document.querySelector('select[aria-label={json.dumps(label)}]'); const s = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; s.call(i, {json.dumps(value)}); i.dispatchEvent(new Event('change', {{bubbles: true}})) }})()")
+                await set_select('Sağlayıcı', 'copilot'); await asyncio.sleep(.2)
+                models = await js("[...document.querySelectorAll('select[aria-label=Model] option')].map(o => o.value).filter(v => v && v !== '__custom')")
+                print('MODELS copilot ' + json.dumps(models[:8]) + f' … ({len(models)})', flush=True)
+                check(len(models) > 5, f'model list for copilot has real entries ({len(models)})')
+                # pick the model the test gateway actually runs if listed, else the first one; the choice must travel
+                chosen = 'gpt-4.1' if 'gpt-4.1' in models else models[0]
+                await set_select('Model', chosen); await asyncio.sleep(.2)
+                check(await js(f"JSON.parse(localStorage.getItem('heren.settings.v1') || '{{}}').model === {json.dumps(chosen)}"), f'model choice persisted in settings ({chosen})')
+                if chosen != 'gpt-4.1':
+                    # keep the live round-trip on the model this test gateway is known to serve
+                    await set_select('Model', '__custom'); await asyncio.sleep(.2)
+                    await js("(() => { const i = document.querySelector('input[aria-label=\"Model adı\"]'); const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; s.call(i, 'gpt-4.1'); i.dispatchEvent(new Event('input', {bubbles: true})) })()")
+                    check(await js("JSON.parse(localStorage.getItem('heren.settings.v1') || '{}').model === 'gpt-4.1'"), 'free-text model entry works when the catalog lacks the model')
+                    chosen = 'gpt-4.1'
                 await click('Ana ekran')
                 urllib.request.urlopen(urllib.request.Request(BASE + '/api/voice/stop', method='POST', headers={'Authorization': 'Bearer ' + KEY}), timeout=5, context=INSECURE).read()  # quiet leftovers from earlier runs
                 # listen to the core bus in parallel: proves the browser really played (voice.playback.* come FROM the browser)
@@ -210,6 +230,9 @@ async def main():
                 print(f'MIC LEVEL {lvl:.3f}', flush=True)
                 check(lvl > 0.01, 'level meter reacts to real microphone input')
                 check(await js("document.querySelector('svg.wave[data-tone=user]').dataset.active === 'true' && document.querySelector('svg.wave[data-tone=heren]').dataset.active === 'false'"), 'green user wave in front of Heren while listening (Heren wave off)')
+                backend = await js('window.__micBackend')
+                print('MIC BACKEND ' + str(backend), flush=True)
+                check(backend == 'worklet', 'microphone captured through AudioWorklet (off the main thread)')
                 await shot('03-listening')
                 # NO second tap: the user stops talking and Heren sends by itself (speech → 1.5 s quiet)
                 t0 = time.monotonic()
@@ -226,7 +249,7 @@ async def main():
                 check(await wait("document.querySelector('[data-testid=voice-transcript]')?.textContent.toLocaleLowerCase('tr').includes('kimsin')", 180), 'real STT understood microphone input')
                 sent = [u for u in requests if '/api/voice/transcribe' in u]
                 print('TRANSCRIBE ' + json.dumps(sent), flush=True)
-                check(sent and 'model=gpt-4.1' in sent[-1] and 'provider=copilot' in sent[-1], 'chosen model travels with the voice question')
+                check(sent and f'model={urllib.parse.quote(chosen)}' in sent[-1] and 'provider=copilot' in sent[-1], 'chosen model travels with the voice question')
                 check(await wait("!!document.querySelector('.conv-row.heren .text')", 180), 'real Hermes response in conversation')
                 print('ANSWER ' + str(await js("document.querySelector('.conv-row.heren .text').textContent")), flush=True)
                 answer = await js("document.querySelector('.conv-row.heren .text').textContent")

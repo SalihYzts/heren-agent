@@ -87,3 +87,27 @@ async def test_voice_playback_events_extend_speaking(host):
     assert h.engine.state().activity == "speaking"
     await bus.emit("voice.playback.finished")
     assert h.engine.state().activity == "idle"
+
+
+async def test_host_persists_on_change_and_restores_on_attach():
+    saved = {}
+    async def save(d): saved.update(d)
+    async def load(): return dict(saved) if saved else None
+    bus = EventBus(); clk = Clock("23:30")
+    h = CharacterHost(bus=bus, cfg=CharacterConfig(), now=clk.now, save_state=save, load_state=load)
+    h.attach(); await h.restore()
+    await bus.emit("hermes.speaking"); await bus.emit("hermes.done")
+    assert saved and saved["energy"] < 1.0, "state change → saved"
+    # new host (restart) picks it up
+    h2 = CharacterHost(bus=EventBus(), cfg=CharacterConfig(), now=Clock("23:31").now, save_state=save, load_state=load)
+    await h2.restore()
+    assert h2.engine.export_state()["energy"] == saved["energy"]
+    assert h2.engine.export_state()["debt"] == saved["debt"]
+
+
+async def test_host_without_persistence_still_works():
+    bus = EventBus(); clk = Clock("14:00")
+    h = CharacterHost(bus=bus, cfg=CharacterConfig(), now=clk.now)
+    h.attach(); await h.restore()
+    await bus.emit("hermes.thinking")
+    assert h.engine.state().activity == "thinking"

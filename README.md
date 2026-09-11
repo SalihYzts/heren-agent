@@ -80,6 +80,14 @@ On first start Heren writes a self-signed certificate (SAN = hostname + every LA
 eriş**. Accept the certificate once on the phone. Heren never opens itself to the internet — for
 remote use put it behind Tailscale/WireGuard.
 
+Device agents then connect over `wss://` and pin that certificate (no "skip verify" mode exists):
+
+```sh
+heren-agent -core wss://<server>:8700/ws/agent -ca-file /path/to/data/tls/cert.pem -pair <code>
+```
+
+The panel's login has **"Bu cihazda beni hatırla (30 gün)"**; unchecked, the key dies with the tab.
+
 Voice config (`HEREN_CONFIG` yaml):
 
 ```yaml
@@ -102,9 +110,8 @@ Live end-to-end scripts (need a running core + Hermes + a Chromium): `apps/core/
 
 ## Roadmap / known gaps
 
-See the phase reports in `docs/`. Open items: wake word (tap-to-talk only for now), persistence of the
-character's energy/sleep debt across restarts, Wake-on-LAN, real Windows validation, metric history,
-a model *list* in settings (today you type the model name; Hermes' `/v1/models` is the next step).
+See the phase reports in `docs/`. Open items: wake word (tap-to-talk only for now), Wake-on-LAN, real
+Windows validation, metric history, a one-command installer.
 
 ## License
 

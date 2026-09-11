@@ -58,6 +58,10 @@ class Settings(BaseModel):
     hermes_session_id: str = "heren"
     hermes_language: str = "Turkish"
     hermes_request_timeout_s: float = 600.0
+    # model picker: read providers/models from the Hermes install on this box (same host as the gateway)
+    hermes_home: Path = Path.home() / ".hermes"                 # auth.json + config.yaml (HERMES_HOME of the gateway)
+    hermes_root: Path = Path.home() / ".hermes" / "hermes-agent"  # the install with venv/bin/python
+    models_cache_s: float = 3600.0
     mcp_key: str = "change-me-mcp"  # Hermes → /mcp bearer (separate from api_key)
     mcp_allowed_hosts: list[str] = Field(default_factory=list)  # e.g. ["127.0.0.1:8700"]; empty = any
 

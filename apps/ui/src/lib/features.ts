@@ -12,7 +12,8 @@ export const FEATURES: Feature[] = [
   { title: 'Onay', body: 'Tehlikeli işlemler (kapat, yeniden başlat, uyut, sonraki açılış) hemen çalışmaz: sağ üstte “Onaylar” sayacı artar, sen onaylarsın. Hermes kendi isteğini onaylayamaz.' },
   { title: 'Karakter', body: 'Heren dinlerken, düşünürken, iş yaparken ve konuşurken farklı görünür. Gece 23:00’ten sonra uyumaya başlar; uyandırırsan uykulu konuşur. Gece çok çalıştırırsan sabah da uykulu olur.' },
   { title: 'Telefondan / tabletten', body: 'Aynı Wi‑Fi’deysen Ayarlar → Telefondan eriş altındaki adresi aç (ya da QR’ı okut). Mikrofon için https şart; ilk girişte sertifikayı bir kez kabul et.' },
-  { title: 'Model', body: 'Ayarlar → Model: bu panelin Hermes’te hangi modeli kullanacağını seçersin. Boş bırakırsan Hermes’in kendi varsayılanı kullanılır.' },
+  { title: 'Model', body: 'Ayarlar → Model: Hermes’in bu makinede kimliği olan sağlayıcıları ve her birinin modellerini listeler; seç ya da “elle yaz”. Boş bırakırsan Hermes’in kendi varsayılanı kullanılır.' },
   { title: 'Tema ve görünüm', body: 'Ayarlar’dan tema (Nothing / Kağıt / Kor) ve Heren’in görünümünü seç. Yeni ASCII paketleri geldikçe listelenir.' },
-  { title: 'Henüz yok', body: 'Uyandırma kelimesi (“Heren!”) yok, dokunarak konuşuyorsun. Enerji ve uyku borcu sunucu yeniden başlayınca sıfırlanır. Uzaktan (Wi‑Fi dışı) erişim için VPN/Tailscale kur; Heren kendisi internete açılmaz.' },
+  { title: 'Giriş', body: 'API anahtarı = HEREN_API_KEY. “Bu cihazda beni hatırla” işaretliyse 30 gün boyunca (her girişte uzar) sorulmaz; değilse sekme kapanınca unutulur. Çıkış yap ikisini de siler.' },
+  { title: 'Henüz yok', body: 'Uyandırma kelimesi (“Heren!”) yok, dokunarak konuşuyorsun. Uzaktan (Wi‑Fi dışı) erişim için VPN/Tailscale kur; Heren kendisi internete açılmaz. Kapalı makineyi uyandırma (Wake-on-LAN) yok.' },
 ]

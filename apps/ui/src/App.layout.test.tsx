@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Event } from './lib/types'
 import App from './App'
@@ -8,13 +8,14 @@ const api = vi.hoisted(() => ({
   audit: vi.fn().mockResolvedValue([]), ask: vi.fn().mockResolvedValue({}), touch: vi.fn().mockResolvedValue({}),
   submit: vi.fn().mockResolvedValue({ status: 'completed', output: {} }),
   qr: vi.fn().mockResolvedValue(new Blob(['<svg/>'], { type: 'image/svg+xml' })),
+  models: vi.fn().mockResolvedValue({ default: { provider: 'copilot', model: 'gpt-4.1' }, providers: [{ id: 'copilot', models: ['gpt-4.1', 'claude-opus-5'] }, { id: 'anthropic', models: ['claude-sonnet-4-6'] }] }),
   listener: null as null | ((e: Event) => void),
 }))
 const recorder = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn(), active: false }))
 const speechLevels = vi.hoisted(() => ({ value: [] as number[] }))
 const speaking = vi.hoisted(() => ({ value: false }))
 vi.mock('./lib/api', () => ({
-  Api: class { approve = api.approve; deny = api.deny; audit = api.audit; ask = api.ask; touch = api.touch; submit = api.submit; qr = api.qr },
+  Api: class { approve = api.approve; deny = api.deny; audit = api.audit; ask = api.ask; touch = api.touch; submit = api.submit; qr = api.qr; models = api.models },
   ApiError: class extends Error {},
   connectEvents: (_key: string, listener: (e: Event) => void) => { api.listener = listener; return () => {} },
 }))
@@ -147,5 +148,37 @@ describe('waves on the character', () => {
     speechLevels.value = [0.3, 0.5]; speaking.value = true
     await act(async () => { snapshot() })
     expect(waves()).toEqual(['heren:true', 'user:false'])
+  })
+})
+
+describe('settings: model picker from the Hermes catalog', () => {
+  it('lists providers/models from /api/models, picks one, and keeps a free-text fallback', async () => {
+    await openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarlar' }))
+    const provider = await screen.findByRole('combobox', { name: 'Sağlayıcı' }) as HTMLSelectElement
+    expect(provider.tagName).toBe('SELECT')
+    expect([...provider.options].map(o => o.value)).toEqual(['', 'copilot', 'anthropic'])
+    expect(screen.getByText(/Hermes varsayılanı: copilot \/ gpt-4.1/)).toBeInTheDocument()
+    fireEvent.change(provider, { target: { value: 'copilot' } })
+    const model = screen.getByLabelText('Model') as HTMLSelectElement
+    expect([...model.options].map(o => o.value)).toEqual(['', 'gpt-4.1', 'claude-opus-5', '__custom'])
+    fireEvent.change(model, { target: { value: 'claude-opus-5' } })
+    expect(JSON.parse(localStorage.getItem('heren.settings.v1')!)).toMatchObject({ provider: 'copilot', model: 'claude-opus-5' })
+    // free text: for a model the catalog does not know yet
+    fireEvent.change(model, { target: { value: '__custom' } })
+    const custom = screen.getByLabelText('Model adı')
+    fireEvent.change(custom, { target: { value: 'gpt-7-preview' } })
+    expect(JSON.parse(localStorage.getItem('heren.settings.v1')!).model).toBe('gpt-7-preview')
+    fireEvent.click(screen.getByRole('button', { name: 'Listeyi yenile' }))
+    await waitFor(() => expect(api.models).toHaveBeenLastCalledWith(true))
+  })
+
+  it('degrades to plain inputs when the catalog is unavailable', async () => {
+    api.models.mockRejectedValueOnce(new Error('hermes down'))
+    await openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarlar' }))
+    const model = await screen.findByLabelText('Model')
+    expect(model.tagName).toBe('INPUT')
+    expect(screen.getByText(/Model listesi alınamadı/)).toBeInTheDocument()
   })
 })

@@ -5,9 +5,14 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +25,7 @@ import (
 
 type Config struct {
 	CoreURL      string
+	CAFile       string // PEM to trust for wss:// (Heren's self-signed cert on a LAN); empty = system roots
 	DeviceID     string
 	Name         string
 	PairingCode  string // used once; cleared after the first welcome
@@ -52,6 +58,7 @@ type Agent struct {
 	cfg     Config
 	kp      *protocol.KeyPair
 	adapter adapter.Adapter
+	http    *http.Client
 
 	mu         sync.Mutex
 	connected  bool
@@ -62,7 +69,29 @@ type Agent struct {
 
 func New(cfg Config, kp *protocol.KeyPair, ad adapter.Adapter) *Agent {
 	cfg.defaults()
-	return &Agent{cfg: cfg, kp: kp, adapter: ad, seen: map[string]float64{}}
+	hc, err := httpClientFor(cfg)
+	if err != nil {
+		// surfaced on the first Run() as a permanent error; New() stays infallible for callers
+		return &Agent{cfg: cfg, kp: kp, adapter: ad, seen: map[string]float64{}, fatal: err}
+	}
+	return &Agent{cfg: cfg, kp: kp, adapter: ad, seen: map[string]float64{}, http: hc}
+}
+
+// httpClientFor builds the dialer's HTTP client. With CAFile set only that certificate (chain)
+// is trusted — pinning, not InsecureSkipVerify.
+func httpClientFor(cfg Config) (*http.Client, error) {
+	if cfg.CAFile == "" {
+		return http.DefaultClient, nil
+	}
+	pemBytes, err := os.ReadFile(cfg.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("ca-file: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		return nil, fmt.Errorf("ca-file %s: no certificate found", cfg.CAFile)
+	}
+	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}}, nil
 }
 
 func (a *Agent) Connected() bool {
@@ -81,6 +110,10 @@ func (a *Agent) FatalError() error {
 
 // Run connects and keeps reconnecting until ctx is cancelled or a fatal rejection occurs.
 func (a *Agent) Run(ctx context.Context) {
+	if a.http == nil { // New() could not build the dialer (bad --ca-file): permanent, say so once
+		log.Printf("FATAL: %v", a.FatalError())
+		return
+	}
 	backoff := a.cfg.ReconnectMin
 	for ctx.Err() == nil {
 		err := a.session(ctx)
@@ -116,7 +149,7 @@ func isPermanent(reason string) bool {
 }
 
 func (a *Agent) session(ctx context.Context) error {
-	c, _, err := websocket.Dial(ctx, a.cfg.CoreURL, nil)
+	c, _, err := websocket.Dial(ctx, a.cfg.CoreURL, &websocket.DialOptions{HTTPClient: a.http})
 	if err != nil {
 		return err
 	}

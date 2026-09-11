@@ -289,3 +289,63 @@ def test_speech_finished_when_not_speaking_is_harmless():
     e.assistant_thinking()
     e.speech_finished()         # stray event mid-thought must not knock the activity
     assert e.state().activity == Activity.THINKING
+
+
+# ----------------------------------------------------------------- persistence across restarts
+
+
+def test_export_restore_keeps_energy_debt_and_sleep_through_a_restart():
+    e, clk = engine("23:30", sleep_recovery_per_min=0.001)   # slow recovery so the numbers stay visible
+    e.assistant_speaking(); e.assistant_done()      # night talk: costs energy, adds debt
+    e.assistant_speaking(); e.assistant_done()
+    clk.advance(60 * 60); e.tick()                  # 00:30 idle → asleep
+    assert e.state().activity == "sleeping" and e.state().energy < 1.0
+    saved = e.export_state()
+    assert saved["schema"] == 1 and set(saved) >= {"energy", "debt", "activity", "last_interaction", "last_tick"}
+
+    # "restart" 20 minutes later (same night → next calendar day): a fresh engine restored from the snapshot
+    clk2 = Clock("00:50"); clk2.advance(24 * 3600)
+    e2 = CharacterEngine(CharacterConfig(sleep_recovery_per_min=0.001), now=clk2.now)
+    assert e2.state().energy == 1.0                 # default before restore
+    e2.restore_state(saved)
+    e2.tick()
+    s = e2.state()
+    assert s.activity == "sleeping", "was asleep, still night → still asleep"
+    assert s.energy > saved["energy"], "recovered a little during the 20 min of downtime"
+    assert e2._debt == saved["debt"]
+
+
+def test_restore_after_a_long_gap_wakes_up_and_recovers_like_it_was_running():
+    e, clk = engine("23:30")
+    e.assistant_speaking(); e.assistant_done()
+    clk.advance(3600); e.tick()
+    saved = e.export_state()
+    clk3 = Clock("14:00"); clk3.advance(24 * 3600)                    # next afternoon
+    e2 = CharacterEngine(CharacterConfig(), now=clk3.now)
+    e2.restore_state(saved)
+    e2.tick()
+    assert e2.state().activity == "idle" and e2.state().mood == "neutral"
+    assert e2.state().energy == 1.0                  # 13 h of sleep+day → fully recovered
+    assert e2._debt == 0.0                            # debt cleared in the morning window
+
+
+def test_restore_ignores_garbage_and_wrong_schema():
+    e, _ = engine("14:00")
+    before = e.export_state()
+    e.restore_state({"schema": 99, "energy": 0.1})
+    e.restore_state({"energy": "nope", "debt": None, "activity": "flying", "last_tick": "x"})
+    assert e.export_state() == before
+    e.restore_state({"schema": 1, "energy": 5.0, "debt": -1.0})   # clamped
+    assert e.export_state()["energy"] == 1.0 and e.export_state()["debt"] == 0.0
+
+
+def test_restore_with_a_snapshot_from_the_future_keeps_the_present_clock():
+    """Clock went backwards (NTP fix, wrong TZ): never integrate negative time, never trust future stamps."""
+    e, clk = engine("14:00")
+    saved = e.export_state()
+    clk_past = Clock("13:00")
+    e2 = CharacterEngine(CharacterConfig(), now=clk_past.now)
+    e2.restore_state(saved)
+    assert e2._last_tick == clk_past.now().timestamp()
+    e2.tick()
+    assert e2.state().energy == 1.0 and e2.state().activity == "idle"

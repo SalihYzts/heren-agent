@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable
+from collections.abc import Awaitable
 from datetime import datetime
 from typing import Any
 
@@ -29,10 +30,15 @@ log = logging.getLogger("heren.character")
 
 class CharacterHost:
     def __init__(self, *, bus: EventBus, cfg: CharacterConfig | None = None,
-                 now: Callable[[], datetime] = datetime.now, tick_interval_s: float = 1.0) -> None:
+                 now: Callable[[], datetime] = datetime.now, tick_interval_s: float = 1.0,
+                 save_state: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+                 load_state: Callable[[], Awaitable[dict[str, Any] | None]] | None = None) -> None:
         self.bus = bus
         self.engine = CharacterEngine(cfg, now=now)
         self.tick_interval_s = tick_interval_s
+        self._save = save_state
+        self._load = load_state
+        self._saved: dict[str, Any] | None = None
         self._published: dict[str, Any] | None = None
         self._unsub: Callable[[], None] | None = None
         self._task: asyncio.Task[None] | None = None
@@ -59,6 +65,29 @@ class CharacterHost:
     def attach(self) -> None:
         self._unsub = self.bus.subscribe("*", self._on_event)
 
+    async def restore(self) -> None:
+        """Load the persisted slow state (energy, sleep debt, asleep?) before the first tick."""
+        if self._load is None:
+            return
+        try:
+            saved = await self._load()
+        except Exception:
+            log.exception("character state load failed; starting fresh")
+            return
+        self.engine.restore_state(saved)
+        self._saved = self.engine.export_state()
+
+    async def _persist_if_changed(self) -> None:
+        if self._save is None:
+            return
+        d = self.engine.export_state()
+        if d != self._saved:
+            self._saved = d
+            try:
+                await self._save(d)
+            except Exception:
+                log.exception("character state save failed")
+
     def detach(self) -> None:
         if self._unsub:
             self._unsub()
@@ -70,6 +99,7 @@ class CharacterHost:
             return  # includes our own character.* output
         getattr(self.engine, method)()
         await self.publish_if_changed()
+        await self._persist_if_changed()
 
     # ------------------------------------------------------------ output
 
@@ -100,5 +130,6 @@ class CharacterHost:
             try:
                 self.engine.tick()
                 await self.publish_if_changed()
+                await self._persist_if_changed()
             except Exception:
                 log.exception("character tick failed")

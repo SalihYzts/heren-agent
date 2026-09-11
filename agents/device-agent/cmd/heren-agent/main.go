@@ -35,6 +35,7 @@ import (
 
 type fileConfig struct {
 	CoreURL          string              `yaml:"core_url"`
+	CAFile           string              `yaml:"ca_file"` // Heren's self-signed cert (wss:// on a LAN)
 	DeviceID         string              `yaml:"device_id"`
 	Name             string              `yaml:"name"`
 	KeyFile          string              `yaml:"key_file"`
@@ -92,6 +93,7 @@ func main() {
 	var (
 		cfgPath = flag.String("config", "", "YAML config file")
 		coreURL = flag.String("core", "", "core WebSocket URL (ws://host:8700/ws/agent)")
+		caFile  = flag.String("ca-file", "", "PEM certificate to trust for wss:// (Heren's data/tls/cert.pem)")
 		devID   = flag.String("id", "", "device id (default: hostname)")
 		name    = flag.String("name", "", "display name (default: hostname)")
 		pair    = flag.String("pair", "", "one-time pairing code from the dashboard")
@@ -123,6 +125,7 @@ func main() {
 	host, _ := os.Hostname()
 	cfg := client.Config{
 		CoreURL:     pick(*coreURL, fc.CoreURL, "ws://127.0.0.1:8700/ws/agent"),
+		CAFile:      pick(*caFile, fc.CAFile, ""),
 		DeviceID:    pick(*devID, fc.DeviceID, host),
 		Name:        pick(*name, fc.Name, host),
 		PairingCode: *pair,

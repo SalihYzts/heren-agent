@@ -66,8 +66,39 @@ aynı Wi‑Fi'daki telefon/tabletten erişim; tüm özellikleri anlatan bir yer.
   - Cevap: "Ben Heren; ev sunucunu ve bağlı cihazlarını bu panel üzerinden kolayca yönetmeni sağlayan asistanım."
   - Tarayıcıda yakalanmamış istisna: 0. Ekranlar: `/tmp/heren-redesign-e2e/0{1..4}-*.png`.
 
+## Faz 8b — eksik kapatma turu (aynı gün, kullanıcı test ederken)
+
+Kullanıcı: "sunucuyu aç ben test edeyim sen de o sıra eksikleri tamamla". Sunucu `data/e2e/` altında kalıcı
+(db, tls, Hermes test profili — hepsi `.gitignore`'da) açıldı; bu sırada kapatılanlar:
+
+- **Model listesi.** Hermes `/v1/models` yalnız `hermes-agent` takma adını döndürüyor — seçici için işe
+  yaramaz. Gerçek kaynak: Hermes kurulumunun `auth.json → credential_pool` (hangi sağlayıcıların kimliği
+  var) × `agent.models_dev.list_provider_models` (models.dev kataloğu). `models_catalog.py` bunu Hermes'in
+  **kendi venv'inde alt süreçle** okur (içe aktarma yok), 1 saat önbellek. `/api/models` → Ayarlar'da
+  sağlayıcı/model `<select>`; "Listede yok, elle yaz…" ve katalog gelmezse düz `<input>` yedeği.
+  Canlı: 3 sağlayıcı, 90 model, 0.98 s.
+- **Oturum.** Giriş ekranında "Bu cihazda beni hatırla (30 gün)": işaretliyse anahtar localStorage'da
+  kayan süreyle; değilse sekmeyle ölür. Çıkış ikisini de siler (`lib/session.ts`, 4 test).
+- **Karakter kalıcılığı.** `CharacterEngine.export_state/restore_state` (enerji, borç, uyuyor mu, son
+  etkileşim/tick; şema 1). `CharacterHost` her değişimde `settings` tablosuna yazar, açılışta okur; ilk
+  `tick()` kapalı kalınan süreyi motor çalışıyormuş gibi bütünler (uyku toparlaması, sabah uyanma, borç
+  silme). Gelecekten gelen damgalar ve saat geri gitmesi yok sayılır. Core restart testi: enerji 0.42 →
+  yeniden açılışta 0.42.
+- **AudioWorklet.** `voice/micCapture.ts`: worklet blob modülü (`heren-mic`, 4096'lık parçalar) → yoksa /
+  CSP engellerse `ScriptProcessorNode`. `useVoice` yalnız `Capture` arayüzünü görür; level/dalga/sessizlik
+  davranışı aynı. e2e tarayıcıda hangi yolun kullanıldığını doğrular.
+
+Testler: core **170**, UI **172**, Go (yeni: `TestPinnedCAFileTrustsSelfSignedCore`), build.
+
+- **Go ajan `--ca-file`.** TLS açıkken ajanın kendi imzalı sertifikaya güvenme yolu yoktu → hiç
+  eşlenemezdi. Sertifika **iğneleme** eklendi (`RootCAs` = yalnız o PEM; `InsecureSkipVerify` yok, eksik
+  dosya = kalıcı hata). Bu makine `wss://127.0.0.1:8701` üzerinden gerçekten eşlendi (`dev-pc`, 12 yetenek).
+
+Canlı e2e (`https://127.0.0.1:8701`, gerçek Piper +4 / whisper / Hermes Copilot gpt-4.1, gerçek eşlenmiş
+cihaz): **52/52, rc=0**. Mikrofon yolu `worklet`; katalog 28 copilot modeli; elle yazma yedeği; otomatik
+gönder 4.3 s (klip 4.2 s); dalgalar 50/50 ve 48.8/50; yakalanmamış istisna 0.
+
 ## Kalanlar
-- Model **listesi** (Hermes `/v1/models`) yerine bugün ad yazılıyor.
-- Uyandırma kelimesi yok. `ScriptProcessorNode` hâlâ kullanımda (deprecated, çalışıyor).
-- Gerçek telefon donanımıyla kullanıcı testi yok (sertifika kabul akışı tarayıcıya göre değişir).
-- Karakter enerji/uyku borcu kalıcılığı, Wake-on-LAN, metrik geçmişi.
+- Uyandırma kelimesi yok. Wake-on-LAN yok. Gerçek Windows doğrulaması yok. Metrik geçmişi yok.
+- Gerçek telefon donanımıyla kullanıcı testi (sertifika kabul akışı tarayıcıya göre değişir).
+- Tek komutla kurulum betiği.

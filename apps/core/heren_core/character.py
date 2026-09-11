@@ -294,3 +294,39 @@ class CharacterEngine:
 
     def state(self) -> CharacterState:
         return self._compute()
+
+    # ----------------------------------------------------------------- persistence
+
+    STATE_SCHEMA = 1
+
+    def export_state(self) -> dict[str, Any]:
+        """The slow variables worth surviving a restart. Transient ones (reactions, tool counters,
+        listening timers) are not: after a restart nothing is running anyway."""
+        return {
+            "schema": self.STATE_SCHEMA,
+            "energy": self._energy,
+            "debt": self._debt,
+            "activity": "sleeping" if self._activity == Activity.SLEEPING else "idle",
+            "last_interaction": self._last_interaction,
+            "last_tick": self._last_tick,
+        }
+
+    def restore_state(self, saved: dict[str, Any] | None) -> None:
+        """Load a snapshot from export_state(). Garbage or a foreign schema is ignored.
+        The next tick() integrates the downtime (energy recovery, morning wake-up, debt clearing)
+        exactly as if the engine had been running — max_step_s bounds the catch-up cost."""
+        if not isinstance(saved, dict) or saved.get("schema") != self.STATE_SCHEMA:
+            return
+        energy, debt = saved.get("energy"), saved.get("debt")
+        if not isinstance(energy, (int, float)) or not isinstance(debt, (int, float)):
+            return
+        self._energy = min(1.0, max(0.0, float(energy)))
+        self._debt = max(0.0, float(debt))
+        if saved.get("activity") == "sleeping":
+            self._activity = Activity.SLEEPING
+        now = self._t()
+        for attr in ("last_interaction", "last_tick"):
+            v = saved.get(attr)
+            if isinstance(v, (int, float)) and v <= now:
+                setattr(self, f"_{attr}", float(v))
+        self._last_state = self._compute()

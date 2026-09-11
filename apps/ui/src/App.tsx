@@ -15,22 +15,22 @@ import { ServerControls, ACTION_LABEL } from './components/ServerControls'
 import { SettingsView } from './components/SettingsView'
 import { VoiceBar } from './components/VoiceBar'
 import { useVoice } from './voice/useVoice'
+import { clearSession, loadSession, saveSession } from './lib/session'
 
-const KEY_STORAGE = 'heren.api_key'
 const APPROVER = 'ui:dashboard'
 type View = 'home' | 'devices' | 'logs' | 'settings'
 
 export default function App() {
-  const [key, setKey] = useState<string | null>(() => sessionStorage.getItem(KEY_STORAGE))
+  const [key, setKey] = useState<string | null>(() => loadSession())
   const [loginError, setLoginError] = useState<string>()
   const [settings, setSettings] = useState<Settings>(loadSettings)
   useEffect(() => { applyTheme(settings.theme) }, [settings.theme])
   const changeSettings = (s: Settings) => { setSettings(s); saveSettings(s) }
 
-  const login = async (k: string) => {
+  const login = async (k: string, remember: boolean) => {
     try {
       await new Api(k).devices()
-      sessionStorage.setItem(KEY_STORAGE, k)
+      saveSession(k, remember)
       setLoginError(undefined)
       setKey(k)
     } catch (e) {
@@ -39,7 +39,7 @@ export default function App() {
   }
   if (!key) return <Login onLogin={login} error={loginError} />
   return <Dashboard apiKey={key} settings={settings} onSettings={changeSettings}
-    onLogout={() => { sessionStorage.removeItem(KEY_STORAGE); setKey(null) }} />
+    onLogout={() => { clearSession(); setKey(null) }} />
 }
 
 interface DashProps { apiKey: string; settings: Settings; onSettings: (s: Settings) => void; onLogout: () => void }
@@ -109,6 +109,7 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
   }, [api, say, voice.recorder])
   const onAsk = useCallback((text: string) => { api.ask(text, choice).catch(e => say(`soru: ${(e as Error).message}`, true)) }, [api, say, choice])
   const fetchQr = useCallback((u: string) => api.qr(u), [api])
+  const fetchModels = useCallback((refresh: boolean) => api.models(refresh), [api])
 
   const listening = !!voice.recorder?.active
   const navBtn = (v: View, label: string) => (
@@ -164,7 +165,7 @@ function Dashboard({ apiKey, settings, onSettings, onLogout }: DashProps) {
           {tab === 'activity' ? <Activity rows={state.activity} deviceNames={names} /> : <Audit rows={audit} deviceNames={names} />}
         </section>}
 
-        {view === 'settings' && <SettingsView settings={settings} devices={paired} serverId={serverId} access={state.access} fetchQr={fetchQr} onChange={onSettings} onLogout={onLogout} />}
+        {view === 'settings' && <SettingsView settings={settings} devices={paired} serverId={serverId} access={state.access} fetchQr={fetchQr} fetchModels={fetchModels} onChange={onSettings} onLogout={onLogout} />}
 
         {showApprovals && <aside className="approval-inspector" id="approval-inspector" aria-label="Onaylar">
           <div className="section-heading"><h2>İşlem onayları</h2><button className="btn" onClick={() => setShowApprovals(false)}>Kapat</button></div>

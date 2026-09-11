@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { LOOKS, THEMES, type Settings } from '../lib/settings'
 import { FEATURES } from '../lib/features'
+import { ModelPicker } from './ModelPicker'
+import type { ModelCatalog } from '../lib/api'
 import type { Device } from '../lib/types'
 
 interface Props {
@@ -9,11 +11,12 @@ interface Props {
   serverId?: string
   access: { urls: string[]; tls: boolean }
   fetchQr?: (url: string) => Promise<Blob>
+  fetchModels?: (refresh: boolean) => Promise<ModelCatalog>
   onChange: (s: Settings) => void
   onLogout: () => void
 }
 
-export function SettingsView({ settings, devices, serverId, access, fetchQr, onChange, onLogout }: Props) {
+export function SettingsView({ settings, devices, serverId, access, fetchQr, fetchModels, onChange, onLogout }: Props) {
   const [guide, setGuide] = useState(false)
   const [qr, setQr] = useState<string | null>(null)
   const first = access.urls[0]
@@ -66,16 +69,8 @@ export function SettingsView({ settings, devices, serverId, access, fetchQr, onC
       <fieldset className="choice-group">
         <legend>Model</legend>
         <p className="dim">Bu panelin Hermes’te kullanacağı model. Boş = Hermes’in varsayılanı.</p>
-        <div className="two-col">
-          <label className="field">Model
-            <input className="input" aria-label="Model" placeholder="örn. gpt-4.1" value={settings.model}
-              onChange={e => onChange({ ...settings, model: e.target.value.trim() })} />
-          </label>
-          <label className="field">Sağlayıcı
-            <input className="input" aria-label="Sağlayıcı" placeholder="örn. copilot, openai, anthropic" value={settings.provider}
-              onChange={e => onChange({ ...settings, provider: e.target.value.trim() })} />
-          </label>
-        </div>
+        <ModelPicker provider={settings.provider} model={settings.model} fetchCatalog={fetchModels}
+          onChange={c => onChange({ ...settings, provider: c.provider, model: c.model })} />
       </fieldset>
 
       <fieldset className="choice-group">

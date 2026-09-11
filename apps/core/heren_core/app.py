@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import contextlib
 import logging
 import time
@@ -81,9 +82,18 @@ class Core:
                                      pairing_code_ttl_s=s.pairing_code_ttl_s)
         self.actions = ActionService(store=self.store, bus=self.bus, dispatcher=self.gateway,
                                      approval_ttl_s=s.approval_ttl_s, critical_enabled=s.critical_enabled)
+        async def _save_character(d: dict[str, Any]) -> None:
+            await self.store.set_setting("character_state", json.dumps(d))
+
+        async def _load_character() -> dict[str, Any] | None:
+            raw = await self.store.get_setting("character_state")
+            return json.loads(raw) if raw else None
+
         self.character = CharacterHost(bus=self.bus, cfg=s.character_config(),
-                                       tick_interval_s=s.character_tick_s)
+                                       tick_interval_s=s.character_tick_s,
+                                       save_state=_save_character, load_state=_load_character)
         self.character.attach()
+        await self.character.restore()   # energy / sleep debt / asleep? from the last run
         self.character.start()
         self.hermes = HermesBridge(bus=self.bus, endpoint=s.hermes_endpoint, api_key=s.hermes_api_key,
                                    session_id=s.hermes_session_id, language=s.hermes_language,
@@ -327,6 +337,14 @@ def create_app(settings: Settings) -> FastAPI:
         segno.make(target, error="m").save(buf, kind="svg", scale=6, dark="#000", light=None, border=2)
         svg = buf.getvalue()
         return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=60"})
+
+    from heren_core.models_catalog import ModelCatalog
+    catalog = ModelCatalog(settings.hermes_home, settings.hermes_root, ttl_s=settings.models_cache_s)
+
+    @app.get("/api/models", dependencies=[Depends(auth)])
+    async def models(refresh: bool = False) -> dict[str, Any]:
+        """Providers with credentials in the Hermes install + the models each can run (cached)."""
+        return await asyncio.to_thread(catalog.get, refresh)
 
     async def _ask(text: str, model: str | None = None, provider: str | None = None) -> dict[str, Any]:
         assert core.hermes and core.character

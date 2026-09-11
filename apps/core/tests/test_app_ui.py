@@ -1,5 +1,6 @@
 """Phase 3 additions to the HTTP surface: CORS for the dev UI, static UI hosting,
 snapshot on event-stream connect, action history."""
+import json
 import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
@@ -19,6 +20,7 @@ def settings(tmp_path):
     (ui / "assets").mkdir()
     (ui / "assets" / "a.js").write_text("1")
     return Settings(db_path=tmp_path / "heren.db", api_key="test-key",
+                    hermes_home=tmp_path / "hermes-home", hermes_root=tmp_path / "hermes-root",
                     core_seed_hex=KeyPair.generate().seed_hex, ui_dir=ui,
                     cors_origins=["http://localhost:5173"])
 
@@ -187,3 +189,44 @@ def test_qr_endpoint_renders_the_first_access_url_as_svg(settings, monkeypatch):
     app2 = create_app(settings)
     with TestClient(app2) as client:
         assert client.get("/api/access/qr.svg", headers=H).status_code == 404
+
+
+def test_models_endpoint_returns_the_catalog_and_refreshes_on_demand(settings, monkeypatch):
+    from heren_core import models_catalog as mc
+    home = settings.hermes_home
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "auth.json").write_text('{"credential_pool": {"copilot": {}}}')
+    (home / "config.yaml").write_text("model:\n  provider: copilot\n  default: gpt-4.1\n")
+    calls = []
+    monkeypatch.setattr(mc, "_list_models_subprocess", lambda root, p: calls.append(p) or ["gpt-4.1", "gpt-5"])
+    app = create_app(settings)
+    with TestClient(app) as client:
+        assert client.get("/api/models").status_code == 401
+        r = client.get("/api/models", headers=H).json()
+        assert r["default"] == {"provider": "copilot", "model": "gpt-4.1"}
+        assert r["providers"] == [{"id": "copilot", "models": ["gpt-4.1", "gpt-5"]}]
+        client.get("/api/models", headers=H)
+        assert calls == ["copilot"]
+        client.get("/api/models?refresh=true", headers=H)
+        assert calls == ["copilot", "copilot"]
+
+
+async def test_character_state_survives_a_core_restart(settings):
+    """Energy/sleep debt live in the settings table; a new Core on the same db picks them up."""
+    from heren_core.app import Core
+    core = Core(settings)
+    await core.start()
+    try:
+        core.character.engine._energy = 0.42
+        core.character.engine._debt = 0.2
+        await core.character._persist_if_changed()
+        assert json.loads(await core.store.get_setting("character_state"))["energy"] == 0.42
+    finally:
+        await core.stop()
+    core2 = Core(settings)
+    await core2.start()
+    try:
+        st = core2.character.engine.export_state()
+        assert st["energy"] == pytest.approx(0.42, abs=0.01) and st["debt"] == 0.2
+    finally:
+        await core2.stop()
